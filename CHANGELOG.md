@@ -11,7 +11,9 @@ All notable changes to this project are documented here. The format follows
 - AGENTS.md says to re-score the reviewers with `lean-forge eval` from the trusted copy after a
   reviewer change lands. The `evals` gate stays: it stops a recorded result that differs from its
   expectation from landing.
-- The Claude hook reserves `approve` and `halt --off` for a human in their own terminal.
+- The Claude hook reserves `approve`, `halt --off` and `land --allow-outside-commits` for a human in
+  their own terminal.
+  An agent can still make a local commit outside the chain, but it can no longer land one.
 - The commit primitive derives the required reviewer and control status from the tree's changed paths.
 - Approval evidence is keyed by both tree and reviewed base.
 - `init` adds `.worktrees/` to `.gitignore`.

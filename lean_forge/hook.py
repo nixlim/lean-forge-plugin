@@ -18,7 +18,7 @@ from lean_forge import git
 
 REASON = ("lean-forge: commits and pushes go through the gate chain in this repository. "
           "Use `lean-forge commit -m \"...\"` and `lean-forge land`.")
-OPERATOR_REASON = ("lean-forge: approve and halt --off are operator actions "
+OPERATOR_REASON = ("lean-forge: approve, halt --off and land --allow-outside-commits are operator actions "
                    "to be run by a human in their own terminal.")
 SEGMENTS = re.compile(r"[;&|\n()`]|\$\(")
 WRITES = ("commit", "push")
@@ -40,7 +40,7 @@ def writes_history(command: str) -> bool:
 
 
 def operator_action(command: str) -> bool:
-    """`approve` and `halt --off` belong to a human, however lean-forge is invoked."""
+    """`approve`, `halt --off` and `land --allow-outside-commits` belong to a human, however invoked."""
     for segment in SEGMENTS.split(command):
         words = [_word(t) for t in segment.split()]
         if "lean-forge" not in words:
@@ -48,7 +48,8 @@ def operator_action(command: str) -> bool:
         rest = words[words.index("lean-forge") + 1:]
         while rest and rest[0].startswith("-"):
             rest = rest[2:] if rest[0] == "-C" else rest[1:]
-        if rest and (rest[0] == "approve" or (rest[0] == "halt" and "--off" in rest)):
+        if rest and (rest[0] == "approve" or (rest[0] == "halt" and "--off" in rest)
+                     or (rest[0] == "land" and "--allow-outside-commits" in rest)):
             return True
     return False
 

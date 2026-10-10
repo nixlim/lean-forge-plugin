@@ -573,9 +573,11 @@ class ProviderTests(Base):
 class HookAndEvalTests(Base):
     def test_hook_reserves_operator_verbs_however_invoked(self):
         for command in ("lean-forge approve 1", "python3 bin/lean-forge approve 1", "lean-forge -C x halt --off",
-                        "cd a && /opt/lf/bin/lean-forge halt --off"):
+                        "cd a && /opt/lf/bin/lean-forge halt --off", "lean-forge land --allow-outside-commits",
+                        "python3 bin/lean-forge -C x land --allow-outside-commits"):
             self.assertTrue(hook.operator_action(command), command)
-        for command in ("lean-forge halt --on stop", 'lean-forge commit -m "approve the plan"', "lean-forge runs"):
+        for command in ("lean-forge halt --on stop", 'lean-forge commit -m "approve the plan"', "lean-forge runs",
+                        "lean-forge land"):
             self.assertFalse(hook.operator_action(command), command)
         self.assertFalse(hook.writes_history('python3 bin/lean-forge commit -m "fix git push"'))
 
