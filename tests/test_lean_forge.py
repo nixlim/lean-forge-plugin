@@ -598,6 +598,21 @@ class HookAndEvalTests(Base):
         for command in ("lean-forge halt --on reason", "lean-forge commit -m x", "lean-forge land"):
             self.assertIsNone(decision(command), command)
 
+    def test_option_abbreviations_are_refused(self):
+        """`halt --of` must not act as `halt --off`: the hook matches operator options exactly."""
+        for argv in (["halt", "--of"], ["land", "--allow"]):
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                cli.parser().parse_args(argv)
+
+    def test_init_writes_the_shipped_template_on_a_fresh_repository(self):
+        fresh = self.tmp / "fresh"
+        sh("git", "init", "-q", str(fresh), cwd=self.tmp)
+        out = cli._init(fresh)
+        self.assertTrue(out["created"])
+        written = (fresh / configuration.CONFIG).read_text()
+        self.assertEqual(written, cli.TEMPLATE.read_text())
+        self.assertIn("[routes.review-final]", written)
+
     def test_init_ignores_local_overrides_and_worktrees(self):
         self.assertEqual(cli._init(self.repo)["status"], "ok")
         ignore = (self.repo / ".gitignore").read_text().splitlines()

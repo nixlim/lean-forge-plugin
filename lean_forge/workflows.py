@@ -221,6 +221,8 @@ def evals(root: Path, ids: list[str] | None = None) -> dict:
                 verdict = review(root, config, run, tree=tree, role=meta["role"], cwd=scratch, record=False)
                 path.with_suffix(".result").write_text(verdict["verdict"] + "\n")
                 results[path.stem] = {"expected": meta["expected"], "got": verdict["verdict"]}
+                run.log("eval", fixture=path.stem, expected=meta["expected"], got=verdict["verdict"],
+                        summary=verdict["summary"], findings=verdict["findings"])
             finally:
                 git.git("worktree", "remove", "--force", str(scratch), cwd=root, check=False)
         ok = all(r.get("got") == r.get("expected") for r in results.values())

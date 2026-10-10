@@ -10,7 +10,7 @@ never for permission to commit.
 
 lean-forge is the lean successor to [forge-plugin](https://github.com/nixlim/forge-plugin). It keeps
 the parts that caught real defects (independent review, a hard iteration cap, structured verdicts,
-gates read from committed configuration) and drops the heavyweight guarantees. The core is about
+gates read from committed configuration) and drops the heavyweight guarantees. The core is under
 1,200 lines of standard-library Python.
 
 ## Requirements
@@ -118,6 +118,7 @@ Every verb prints one JSON outcome. The exit code follows the status:
 `needs_direction` comes from:
 
 - `commit`: the review-and-fix iteration cap, a reviewer's question, or a fix agent's question.
+- `approve`: the same as `commit`, because approving re-enters the commit.
 - `review`: a reviewer's question.
 - `implement` or `fix`: the writing agent's question.
 - `land`: a final reviewer's question, a commit made outside the chain, or a rebase conflict.

@@ -91,32 +91,33 @@ def _runs(root: Path, run_id: str | None) -> dict:
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="lean-forge", description="Autonomous, mechanical gate chain for agent-written code.")
+    p = argparse.ArgumentParser(prog="lean-forge", description="Autonomous, mechanical gate chain for agent-written code.",
+                                allow_abbrev=False)  # the hook matches option names exactly
     p.add_argument("-C", dest="cwd", default=".", help="run as if started in this directory")
     sub = p.add_subparsers(dest="verb", required=True)
-    c = sub.add_parser("commit", help="gates, scan, review loop, then commit the whole worktree")
+    c = sub.add_parser("commit", allow_abbrev=False, help="gates, scan, review loop, then commit the whole worktree")
     c.add_argument("-m", "--message", required=True, help="commit message, or @file")
     c.add_argument("--no-autofix", action="store_true", help="stop at the first BLOCK instead of fixing")
-    lnd = sub.add_parser("land", help="rebase onto the remote base, re-run gates, fast-forward push")
+    lnd = sub.add_parser("land", allow_abbrev=False, help="rebase onto the remote base, re-run gates, fast-forward push")
     lnd.add_argument("--allow-outside-commits", action="store_true", help="land commits made outside the chain")
-    r = sub.add_parser("review", help="review the current worktree state without committing")
+    r = sub.add_parser("review", allow_abbrev=False, help="review the current worktree state without committing")
     r.add_argument("--role", choices=["review-cheap", "review-final"])
-    sub.add_parser("implement", help="run the implement agent on a brief (text or @file)").add_argument("text")
-    sub.add_parser("fix", help="run the fix agent on findings (text or @file)").add_argument("text")
-    e = sub.add_parser("eval", help="score golden tasks in .lean-forge/evals, or --check recorded results")
+    sub.add_parser("implement", allow_abbrev=False, help="run the implement agent on a brief (text or @file)").add_argument("text")
+    sub.add_parser("fix", allow_abbrev=False, help="run the fix agent on findings (text or @file)").add_argument("text")
+    e = sub.add_parser("eval", allow_abbrev=False, help="score golden tasks in .lean-forge/evals, or --check recorded results")
     e.add_argument("ids", nargs="*")
     e.add_argument("--check", action="store_true")
-    a = sub.add_parser("approve", help="approve the tree a commit run is waiting on, then commit it")
+    a = sub.add_parser("approve", allow_abbrev=False, help="approve the tree a commit run is waiting on, then commit it")
     a.add_argument("run_id")
-    rs = sub.add_parser("runs", help="recent runs (the dashboard), or one run's steps")
+    rs = sub.add_parser("runs", allow_abbrev=False, help="recent runs (the dashboard), or one run's steps")
     rs.add_argument("run_id", nargs="?")
-    h = sub.add_parser("halt", help="show, set (--on) or clear (--off) the operator halt")
+    h = sub.add_parser("halt", allow_abbrev=False, help="show, set (--on) or clear (--off) the operator halt")
     h.add_argument("--on", metavar="REASON")
     h.add_argument("--off", action="store_true")
     for verb, what in (("init", "write .lean-forge/config.toml"), ("config", "print the resolved config and its source"),
                        ("hook", "Claude Code PreToolUse hook; reads the hook payload on stdin"),
                        ("version", "print the version")):
-        sub.add_parser(verb, help=what)
+        sub.add_parser(verb, allow_abbrev=False, help=what)
     return p
 
 

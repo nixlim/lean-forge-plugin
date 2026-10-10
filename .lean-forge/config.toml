@@ -3,6 +3,8 @@
 [gates]
 test = "python3 -m unittest discover -s tests -q"
 lint = "ruff check lean_forge tests bin/lean-forge"
+# Every golden task in .lean-forge/evals has a recorded result equal to its expectation.
+evals = "python3 bin/lean-forge eval --check"
 
 [control]
 # Nearly everything here is a control: the engine, its prompts, its rules and its tests.

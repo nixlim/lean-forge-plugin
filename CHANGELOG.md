@@ -26,6 +26,17 @@ All notable changes to this project are documented here. The format follows
 - The hook recognises operator-only verbs however lean-forge is invoked (`python3 bin/lean-forge approve`).
 - The configuration template lives in `templates/config.toml` instead of being duplicated in the CLI.
   `templates/` is a control path, so edits to the shipped defaults still get review-final.
+- Option abbreviations are refused (`halt --of` no longer means `halt --off`), so the hook's exact
+  match on operator-only options cannot be sidestepped.
+- Eval runs record each reviewer's summary and findings in the run log, so a recorded result can be
+  audited for being right for the right reason.
+
+### Added (after the follow-ups landed)
+
+- Recorded results for the three golden tasks, scored against the landed code with the real lanes
+  (Codex gpt-5.6-terra for review-cheap, Claude Opus 5.5 for review-final), and an `evals` gate in
+  this repository's configuration (`lean-forge eval --check`).
+
 ## [0.1.0] - 2026-10-10
 
 ### Added
