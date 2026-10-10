@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The README is now a short overview. The reference moved to `docs/`: primitives, configuration,
+  agents, records and the dashboard, parallel units, evals, operating, and migrating from
+  forge-plugin.
+- The skills tell the agent that a human runs `approve`, `halt --off` and
+  `land --allow-outside-commits`, because the hook denies them to agents.
 - AGENTS.md says to re-score the reviewers with `lean-forge eval` from the trusted copy after a
   reviewer change lands. The `evals` gate stays: it stops a recorded result that differs from its
   expectation from landing.

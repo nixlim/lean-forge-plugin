@@ -31,7 +31,7 @@ halted, 2 needs_direction, 3 awaiting_approval.
    |---|---|
    | `committed` | Continue with the next unit. |
    | `blocked` | Read `stage` and `findings`, `hits` or `reason`. Fix the cause and run commit again. |
-   | `needs_direction` | Ask the human the `questions` with AskUserQuestion, offering the options each question names. Act on the answer, then rerun. |
+   | `needs_direction` | Ask the human the `questions` with AskUserQuestion, offering the options each question names. Act on the answer, then rerun. If the answer needs `approve`, `halt --off` or `land --allow-outside-commits`, ask the human to run it in their own terminal; the hook denies them to you. |
    | `awaiting_approval` | Approval is configured for this change. Tell the human to run `lean-forge approve <run>`. |
    | `halted` | Stop and report the reason. Never clear a halt. |
    | `error` | Read `reason` (configuration, provider login, a reviewer that tried to write) and fix the cause. |
@@ -69,6 +69,8 @@ other's edits.
 - Reruns are cheap and safe: evidence for an unchanged tree is reused, so a rerun skips gates and
   reviews that already passed.
 - `lean-forge runs` is the dashboard. `lean-forge runs <id>` shows every step with time and cost.
+- The reference is in `${CLAUDE_PLUGIN_ROOT}/docs/`: primitives, configuration, agents, records,
+  parallel units, evals, operating and migrating from forge-plugin.
 - After updating lean-forge or changing a reviewer route, run `lean-forge eval` if the repository has
   golden tasks. A result that differs from `expected` means the reviewers regressed; tell the human.
 - `lean-forge review` reviews the current state without committing. `lean-forge config` shows the

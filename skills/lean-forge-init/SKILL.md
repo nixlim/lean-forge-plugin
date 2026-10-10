@@ -16,8 +16,9 @@ things first:
 1. **Open forge work.** If `.codex-orchestrator/runs/` or `.forge/chains/` holds runs or chains, list
    them and ask the human which are finished and which can be abandoned. Don't try to finish them;
    nothing in lean-forge resumes them. A branch with forge commits that never landed fails
-   `lean-forge land`'s provenance check. Redo that work through lean-forge, or land it with
-   `--allow-outside-commits` if the human says so.
+   `lean-forge land`'s provenance check. Redo that work through lean-forge, or ask the human to land
+   it with `lean-forge land --allow-outside-commits` in their own terminal. The hook denies that
+   switch to you.
 2. **The forge plugin.** Run `claude plugin list`. If any `forge@...` entry is enabled, ask the human to
    disable it in each scope (`claude plugin disable forge@forge --scope <scope>`) and restart the
    session. Otherwise its hooks and skills keep running beside lean-forge.
