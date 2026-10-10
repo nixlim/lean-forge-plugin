@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""lean-forge entry point. Works from the plugin checkout or a symlink on PATH."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from lean_forge.cli import main
+
+sys.exit(main())

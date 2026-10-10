@@ -1,0 +1,10 @@
+{
+  "name": "lean-forge",
+  "description": "Autonomous, mechanical gate chain for agent-written code: gates, an independent capped review loop, exact-tree commits and locked fast-forward landing. Asks a human only for direction.",
+  "author": {
+    "name": "nixlim"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/nixlim/lean-forge-plugin",
+  "keywords": ["claude-code", "codex", "code-review", "workflow", "autonomous-agents", "git"]
+}

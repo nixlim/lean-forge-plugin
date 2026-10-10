@@ -1,0 +1,9 @@
+lean-forge
+Copyright (c) 2026 Igor Ryabchuk. Licensed under the MIT License (see LICENSE).
+
+This product includes material derived from the MockServer AI-SDLC instruction
+system (https://github.com/mock-server/mockserver-monorepo, commit 7febd65f,
+James Bloom / MockServer project), licensed under the Apache License, Version 2.0.
+The derived material is rules/review-constitution.md, adapted via nixlim/forge
+and nixlim/forge-plugin. The Apache License 2.0 text is in
+third_party/LICENSE-APACHE-2.0.

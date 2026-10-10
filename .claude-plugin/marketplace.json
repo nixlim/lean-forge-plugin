@@ -1,0 +1,17 @@
+{
+  "name": "lean-forge",
+  "description": "Lean, autonomous gate chain for Claude Code and Codex.",
+  "owner": {
+    "name": "nixlim"
+  },
+  "plugins": [
+    {
+      "name": "lean-forge",
+      "source": "./",
+      "description": "Gates, an independent capped review loop, exact-tree commits and locked fast-forward landing.",
+      "author": {
+        "name": "nixlim"
+      }
+    }
+  ]
+}
