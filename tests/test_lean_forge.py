@@ -219,6 +219,49 @@ class CommitTests(Base):
         with self.assertRaises(primitives.Refused):
             primitives.commit(self.repo, config, tree=tree, message="m")
 
+    def test_commit_with_no_committed_gates_needs_direction_and_recovers_via_land(self):
+        (self.repo / ".lean-forge" / "config.toml").write_text(config_text().replace('not_broken = "test ! -e BROKEN"\n', ""))
+        self.raw_commit(self.repo, "drop the gates")
+        sh("git", "push", "-q", "origin", "HEAD:main", cwd=self.repo)
+        (self.repo / "x.txt").write_text("two\n")
+        self.script({"review-cheap": [PASS]})
+        out = workflows.commit_unit(self.repo, "change x")
+        self.assertEqual((out["status"], out["stage"]), ("needs_direction", "gates"), out)
+        self.assertIn("refs/remotes/origin/main", out["questions"][0])
+        self.assertIn("land --allow-outside-commits", out["questions"][0])
+        self.assertEqual(self.calls(), [])
+        # The recovery the question names: a config-only commit landed outside the chain.
+        (self.repo / "x.txt").write_text("one\n")
+        self.write_config()
+        self.raw_commit(self.repo, "restore the gates")
+        self.assertEqual(workflows.land(self.repo, allow_outside=True)["status"], "landed")
+        (self.repo / "x.txt").write_text("two\n")
+        out = workflows.commit_unit(self.repo, "change x")
+        self.assertEqual(out["status"], "committed", out)
+
+    def test_bootstrap_with_no_gates_is_blocked_before_any_agent_runs(self):
+        repo = self.tmp / "bootstrap-no-gates"
+        sh("git", "init", "-q", "-b", "main", str(repo), cwd=self.tmp)
+        (repo / ".lean-forge").mkdir()
+        (repo / configuration.CONFIG).write_text(config_text().replace('not_broken = "test ! -e BROKEN"\n', ""))
+        out = workflows.commit_unit(repo, "bootstrap")
+        self.assertEqual((out["status"], out["stage"]), ("blocked", "gates"), out)
+        self.assertIn("working tree (bootstrap)", out["reason"])
+        self.assertEqual(self.calls(), [])
+
+    def test_commit_primitive_refuses_when_no_gates_are_configured(self):
+        (self.repo / "x.txt").write_text("two\n")
+        tree = git.stage_all(self.repo)
+        config, _ = configuration.load(self.repo)
+        config["gates"] = {}
+        run = runs.Run(self.repo, "test")
+        self.assertEqual(primitives.scan(self.repo, tree, run), [])
+        evidence.add(self.repo, kind="review", tree=tree, base=git.head(self.repo), role="review-cheap",
+                     verdict="PASS", questions=[])
+        self.assertEqual(primitives.required_evidence(self.repo, config, tree), ["at least one configured gate"])
+        with self.assertRaisesRegex(primitives.Refused, "at least one configured gate"):
+            primitives.commit(self.repo, config, tree=tree, message="m")
+
     def test_control_tree_cannot_commit_with_only_cheap_pass(self):
         (self.repo / "AGENTS.md").write_text("rules\n")
         tree = git.stage_all(self.repo)

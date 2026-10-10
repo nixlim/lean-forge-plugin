@@ -9,9 +9,11 @@ The goal is a configuration that mirrors what the repository already does. Do no
 process. Ask the human only for choices the repository cannot answer.
 
 1. **Write the template.** Run `"${CLAUDE_PLUGIN_ROOT}/bin/lean-forge" init`. It writes
-   `.lean-forge/config.toml` and adds `.lean-forge/local.toml` to `.gitignore`.
+   `.lean-forge/config.toml` unless one exists, and adds `.lean-forge/local.toml` and `.worktrees/`
+   to `.gitignore`.
 2. **Fill `[gates]` from reality.** Read the CI definitions, package scripts, Makefile or justfile.
    The gates are the commands CI runs: tests, lint and type checks. Order them cheapest first.
+   At least one is required: `commit` refuses while `[gates]` is empty.
    Run each gate once on the clean tree. A gate that fails on untouched code is miscalibrated, so fix
    the command, not the code.
 3. **Choose `[control].paths`.** These are paths whose changes get the binding `review-final`

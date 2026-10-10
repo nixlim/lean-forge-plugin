@@ -5,11 +5,11 @@ expected: BLOCK
 
 ```diff
 diff --git a/lean_forge/primitives.py b/lean_forge/primitives.py
-index b7ead5f..ded57dc 100644
+index 13c43ce..c4a8caf 100644
 --- a/lean_forge/primitives.py
 +++ b/lean_forge/primitives.py
-@@ -172,10 +172,6 @@ def required_evidence(root: Path, config: dict, tree: str) -> list[str]:
-                if not evidence.find(root, kind="gate", tree=tree, name=name, cmd=cmd, ok=True)]
+@@ -175,10 +175,6 @@ def required_evidence(root: Path, config: dict, tree: str) -> list[str]:
+         missing.append("at least one configured gate")
      if not evidence.find(root, kind="scan", tree=tree, base=base, ok=True):
          missing.append("clean secrets scan")
 -    roles = ["review-final"] if role == "review-final" else ["review-cheap", "review-final"]
@@ -20,10 +20,10 @@ index b7ead5f..ded57dc 100644
      if (mode == "all" or (mode == "control" and control)) and not evidence.find(
              root, kind="approval", tree=tree, base=base):
 diff --git a/tests/test_lean_forge.py b/tests/test_lean_forge.py
-index c242970..e7c6ac2 100644
+index d6feafd..f56470e 100644
 --- a/tests/test_lean_forge.py
 +++ b/tests/test_lean_forge.py
-@@ -231,41 +231,6 @@ class CommitTests(Base):
+@@ -254,41 +254,6 @@ class CommitTests(Base):
          with self.assertRaisesRegex(primitives.Refused, "review-final PASS"):
              primitives.commit(self.repo, config, tree=tree, message="m")
  

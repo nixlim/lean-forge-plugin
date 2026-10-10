@@ -53,9 +53,9 @@ lean-forge runs                          # the dashboard: status, time and cost 
 halt. Each acts on an explicit git tree id. Each records append-only evidence under
 `<git-common-dir>/lean-forge/`, which is shared by every worktree and never committed.
 
-**One guarantee.** The `commit` primitive refuses unless evidence for that exact tree shows that
-every gate passed, the secrets scan was clean, the required reviewer said PASS, and an approval
-exists when approval is configured. Ordering comes from these preconditions rather than from an
+**One guarantee.** The `commit` primitive refuses unless at least one gate is configured and
+evidence for that exact tree shows that every gate passed, the secrets scan was clean, the required
+reviewer said PASS, and an approval exists when approval is configured. Ordering comes from these preconditions rather than from an
 engine, so the primitives compose in any order and unsafe orders simply fail. Commits use
 `git commit-tree` and a compare-and-swap `update-ref`, so a commit is exactly the reviewed tree and a
 moved HEAD fails instead of racing.
@@ -90,9 +90,15 @@ or routes that judge it. `.lean-forge/local.toml` is uncommitted and may overrid
 and `effort` only, so each developer picks their own models; any other key there is an error.
 `lean-forge config` prints the resolved configuration and the ref it came from.
 
+`commit` refuses while `[gates]` is empty. If the committed configuration has no gates (for example
+the template committed unchanged), `commit` cannot carry the fix, because it judges with the
+committed configuration: add the gates in a config-only `git commit` and land it with
+`lean-forge land --allow-outside-commits`. `land` re-runs whatever gates the base has, so it does not
+refuse an empty `[gates]`; that is what lets this fix through.
+
 | Section | Keys | Default |
 |---|---|---|
-| `[gates]` | name = shell command; all must exit 0 | none |
+| `[gates]` | name = shell command; at least one, and all must exit 0 | none |
 | `[control]` | `paths`: prefixes that get `review-final` | config, CI, agent guidance |
 | `[review]` | `max_iterations`, `autofix`, `focus` | 8, true, "" |
 | `[approval]` | `mode`: `none`, `control` or `all` | `none` |
@@ -117,7 +123,8 @@ Every verb prints one JSON outcome. The exit code follows the status:
 
 `needs_direction` comes from:
 
-- `commit`: the review-and-fix iteration cap, a reviewer's question, or a fix agent's question.
+- `commit`: the review-and-fix iteration cap, a reviewer's question, a fix agent's question, or
+  empty `[gates]` in the committed configuration.
 - `approve`: the same as `commit`, because approving re-enters the commit.
 - `review`: a reviewer's question.
 - `implement` or `fix`: the writing agent's question.

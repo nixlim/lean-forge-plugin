@@ -171,6 +171,8 @@ def required_evidence(root: Path, config: dict, tree: str) -> list[str]:
     role, control = unit["role"], unit["control"]
     missing = [f"gate {name} on {tree[:12]}" for name, cmd in config["gates"].items()
                if not evidence.find(root, kind="gate", tree=tree, name=name, cmd=cmd, ok=True)]
+    if not config["gates"]:
+        missing.append("at least one configured gate")
     if not evidence.find(root, kind="scan", tree=tree, base=base, ok=True):
         missing.append("clean secrets scan")
     roles = ["review-final"] if role == "review-final" else ["review-cheap", "review-final"]

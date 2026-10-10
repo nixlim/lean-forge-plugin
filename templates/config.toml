@@ -3,6 +3,7 @@
 
 [gates]
 # Named shell commands, run in order on every candidate. All must exit 0.
+# At least one is required: commit refuses while this table is empty.
 # test = "python3 -m pytest -q"
 # lint = "ruff check ."
 

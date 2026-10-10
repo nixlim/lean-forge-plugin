@@ -43,6 +43,14 @@ def commit_unit(root: Path, message: str, *, autofix: bool | None = None) -> dic
             return run.finish("halted", reason=reason)
         if not message.strip():
             return run.finish("blocked", reason="empty commit message")
+        if not config["gates"] and not config["source_ref"]:
+            return run.finish("blocked", stage="gates", reason=f"no gates in {configuration.CONFIG} ({source}); "
+                              "add the commands CI runs under [gates]")
+        if not config["gates"]:  # read from a committed ref, so a working-tree edit cannot fix it
+            return run.finish("needs_direction", stage="gates", source=source, questions=[(
+                f"{configuration.CONFIG} at {source} has no gates, and commit judges with that ref's config. "
+                "Add the commands CI runs under [gates] in a config-only `git commit` and land it with "
+                "`lean-forge land --allow-outside-commits`?")])
         autofix = config["review"]["autofix"] if autofix is None else autofix
         cap = int(config["review"]["max_iterations"])
         for iteration in range(1, cap + 1):

@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format follows
 - `init` adds `.worktrees/` to `.gitignore`.
 - Reviewer and writer checks now detect changes to `.lean-forge/local.toml`.
 - The README describes the core as about 1,200 lines and lists every `needs_direction` source.
+- `commit` refuses while `[gates]` is empty, before any reviewer runs, so the secrets scan and a
+  reviewer are never the only checks on a `commit`. `land` is unchanged: it re-runs the base's gates,
+  whatever they are, and does not run the scan.
+- Migration: a repository that committed the template unchanged has empty `[gates]` on its base, and
+  `commit` now returns `needs_direction` there. Add the gates in a config-only `git commit` and land
+  it with `lean-forge land --allow-outside-commits`.
 
 ### Added
 
@@ -22,6 +28,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The init skill says that `init` also adds `.worktrees/` to `.gitignore` and never overwrites an
+  existing configuration.
 - Stopping a run (SIGTERM or Ctrl-C) now kills its gate or agent process group instead of orphaning it.
 - The hook recognises operator-only verbs however lean-forge is invoked (`python3 bin/lean-forge approve`).
 - The configuration template lives in `templates/config.toml` instead of being duplicated in the CLI.
