@@ -73,12 +73,13 @@ def changed_paths(cwd: Path | str, tree: str) -> list[str]:
     return [line for line in out.splitlines() if line]
 
 
-def snapshot(cwd: Path | str) -> str:
-    """Everything a read-only agent must leave unchanged: HEAD, index tree, and worktree status."""
+def snapshot(cwd: Path | str, *files: str) -> str:
+    """Everything a read-only agent must leave unchanged, plus `files` such as the ignored local override."""
     return "\n".join([
         head(cwd) or "",
         git("write-tree", cwd=cwd).strip(),
         git("status", "--porcelain=v1", "--untracked-files=all", "--ignored=no", cwd=cwd),
+        *(repr((Path(cwd) / f).read_bytes() if (Path(cwd) / f).exists() else None) for f in files),
     ])
 
 

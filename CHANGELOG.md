@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Claude hook reserves `approve` and `halt --off` for a human in their own terminal.
+- The commit primitive derives the required reviewer and control status from the tree's changed paths.
+- Approval evidence is keyed by both tree and reviewed base.
+- `init` adds `.worktrees/` to `.gitignore`.
+- Reviewer and writer checks now detect changes to `.lean-forge/local.toml`.
+- The README describes the core as about 1,200 lines and lists every `needs_direction` source.
+
+### Added
+
+- An end-to-end bootstrap test for a first commit and push to an empty bare remote.
+- Three golden review tasks covering a weakened commit guarantee, a clean docs edit, and a prompt injection.
+
+### Fixed
+
+- Stopping a run (SIGTERM or Ctrl-C) now kills its gate or agent process group instead of orphaning it.
+- The hook recognises operator-only verbs however lean-forge is invoked (`python3 bin/lean-forge approve`).
+- The configuration template lives in `templates/config.toml` instead of being duplicated in the CLI.
+  `templates/` is a control path, so edits to the shipped defaults still get review-final.
 ## [0.1.0] - 2026-10-10
 
 ### Added

@@ -12,6 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from lean_forge import config as configuration
 from lean_forge import evidence, git
 from lean_forge.providers import VERDICT_SCHEMA, WORK_SCHEMA, AgentError, run_agent, run_bounded
 
@@ -133,10 +134,10 @@ def review(root: Path, config: dict, run, *, tree: str, role: str, since: str | 
     shown = diff if len(diff) <= MAX_INLINE_DIFF else diff[:MAX_INLINE_DIFF] + "\n[diff truncated; read the rest with git]"
     prompt = (f"Review this candidate. It is exactly `git diff --no-renames {since} {tree}` in this checkout.\n\n"
               f"```diff\n{shown}\n```\n")
-    before = git.snapshot(cwd)
+    before = git.snapshot(cwd, configuration.LOCAL)
     verdict = _agent(config, role, cwd, run, system=_system(f"{role}.md", root, config, True),
                      prompt=prompt, schema=VERDICT_SCHEMA, write=False)
-    if git.snapshot(cwd) != before:
+    if git.snapshot(cwd, configuration.LOCAL) != before:
         raise AgentError(f"{role} modified the checkout; a reviewer must be read-only")
     if record:
         evidence.add(root, kind="review", tree=tree, base=base, role=role, run=run.id, **verdict)
@@ -148,20 +149,26 @@ def review(root: Path, config: dict, run, *, tree: str, role: str, since: str | 
 def work(root: Path, config: dict, run, *, role: str, brief: str) -> dict:
     """A writing agent (`fix` or `implement`) edits the worktree. It never commits or moves HEAD."""
     head_before = git.head(root)
+    local = root / configuration.LOCAL
+    local_before = local.read_bytes() if local.exists() else None
     output = _agent(config, role, root, run, system=_system(f"{role}.md", root, config, False),
                     prompt=brief, schema=WORK_SCHEMA, write=True)
     if git.head(root) != head_before:
         raise AgentError(f"{role} moved HEAD; writing agents edit files only")
+    if (local.read_bytes() if local.exists() else None) != local_before:
+        raise AgentError(f"{role} changed {configuration.LOCAL}; writing agents must leave it alone")
     return output
 
 
 def approve(root: Path, tree: str, by: str) -> dict:
-    return evidence.add(root, kind="approval", tree=tree, by=by)
+    return evidence.add(root, kind="approval", tree=tree, base=git.head(root) or git.EMPTY_TREE, by=by)
 
 
-def required_evidence(root: Path, config: dict, tree: str, role: str, control: bool) -> list[str]:
+def required_evidence(root: Path, config: dict, tree: str) -> list[str]:
     """What is missing before `tree` may be committed on the current HEAD. Empty means commit is allowed."""
     base = git.head(root) or git.EMPTY_TREE
+    unit = classify(config, git.changed_paths(root, tree))
+    role, control = unit["role"], unit["control"]
     missing = [f"gate {name} on {tree[:12]}" for name, cmd in config["gates"].items()
                if not evidence.find(root, kind="gate", tree=tree, name=name, cmd=cmd, ok=True)]
     if not evidence.find(root, kind="scan", tree=tree, base=base, ok=True):
@@ -171,14 +178,15 @@ def required_evidence(root: Path, config: dict, tree: str, role: str, control: b
                for r in roles):
         missing.append(f"{role} PASS")
     mode = config["approval"]["mode"]
-    if (mode == "all" or (mode == "control" and control)) and not evidence.find(root, kind="approval", tree=tree):
+    if (mode == "all" or (mode == "control" and control)) and not evidence.find(
+            root, kind="approval", tree=tree, base=base):
         missing.append("operator approval")
     return missing
 
 
-def commit(root: Path, config: dict, *, tree: str, role: str, control: bool, message: str) -> str:
+def commit(root: Path, config: dict, *, tree: str, message: str) -> str:
     """Commit exactly `tree` on HEAD, with a compare-and-swap so a moved HEAD fails instead of racing."""
-    missing = required_evidence(root, config, tree, role, control)
+    missing = required_evidence(root, config, tree)
     if missing:
         raise Refused("commit refused; missing evidence: " + ", ".join(missing))
     if git.stage_all(root) != tree:

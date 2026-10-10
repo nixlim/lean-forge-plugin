@@ -78,10 +78,12 @@ def commit_unit(root: Path, message: str, *, autofix: bool | None = None) -> dic
                 return run.finish("needs_direction", stage="fix", tree=tree, questions=fixed["questions"],
                                   summary=fixed["summary"], findings=findings)
         mode = config["approval"]["mode"]
-        if (mode == "all" or (mode == "control" and unit["control"])) and not evidence.find(root, kind="approval", tree=tree):
-            return run.finish("awaiting_approval", tree=tree, role=unit["role"], control_paths=unit["control_paths"],
+        if (mode == "all" or (mode == "control" and unit["control"])) and not evidence.find(
+                root, kind="approval", tree=tree, base=git.head(root) or git.EMPTY_TREE):
+            return run.finish("awaiting_approval", tree=tree, base=git.head(root) or git.EMPTY_TREE,
+                              role=unit["role"], control_paths=unit["control_paths"],
                               questions=[f"Approve commit of tree {tree[:12]}? Run `lean-forge approve {run.id}`."])
-        sha = commit(root, config, tree=tree, role=unit["role"], control=unit["control"], message=message)
+        sha = commit(root, config, tree=tree, message=message)
         return run.finish("committed", sha=sha, tree=tree, iterations=iteration, role=unit["role"])
     except FAILURES as exc:
         return run.finish("error", reason=str(exc))
@@ -100,6 +102,8 @@ def approve_run(root: Path, run_id: str, by: str) -> dict:
         return {"status": "error", "reason": f"run {run_id} is {outcome.get('status')}, not awaiting_approval"}
     worktree = Path(json.loads((outcome_path.parent / "log.jsonl").read_text().splitlines()[0])["cwd"])
     try:
+        if (git.head(worktree) or git.EMPTY_TREE) != (outcome.get("base") or git.EMPTY_TREE):
+            return {"status": "error", "reason": f"{worktree} changed base since run {run_id}; rerun commit there"}
         if git.stage_all(worktree) != outcome["tree"]:
             return {"status": "error", "reason": f"{worktree} changed since run {run_id}; rerun commit there"}
     except (git.GitError, OSError) as exc:

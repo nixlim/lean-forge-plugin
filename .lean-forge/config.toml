@@ -6,8 +6,8 @@ lint = "ruff check lean_forge tests bin/lean-forge"
 
 [control]
 # Nearly everything here is a control: the engine, its prompts, its rules and its tests.
-paths = ["lean_forge/", "bin/", "prompts/", "rules/", "skills/", "hooks/", "tests/", ".claude-plugin/",
-         ".lean-forge/", "pyproject.toml", "AGENTS.md", "CLAUDE.md"]
+paths = ["lean_forge/", "bin/", "prompts/", "rules/", "skills/", "hooks/", "templates/", "tests/",
+         ".claude-plugin/", ".lean-forge/", "pyproject.toml", "AGENTS.md", "CLAUDE.md"]
 
 [review]
 max_iterations = 8

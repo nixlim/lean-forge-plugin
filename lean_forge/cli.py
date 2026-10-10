@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import signal
 import sys
 from pathlib import Path
 
@@ -21,52 +22,7 @@ EXIT = {"needs_direction": 2, "awaiting_approval": 3}
 OK = {"committed", "landed", "evaluated", "noop", "ok", "reviewed", "done", "halt"}
 FAILURES = (AgentError, git.GitError, configuration.ConfigError)
 
-TEMPLATE = """\
-# lean-forge configuration. Committed; read from the remote base tip, then HEAD.
-# Per-developer model choices go in .lean-forge/local.toml (route model and effort only, uncommitted).
-
-[gates]
-# Named shell commands, run in order on every candidate. All must exit 0.
-# test = "python3 -m pytest -q"
-# lint = "ruff check ."
-
-[control]
-# Paths whose changes get the binding review-final reviewer (and approval, if mode = "control").
-paths = [".lean-forge/", ".claude/", ".codex/", ".github/", "AGENTS.md", "CLAUDE.md"]
-
-[review]
-max_iterations = 8   # review-and-fix rounds before asking for direction
-autofix = true       # on BLOCK, a fix agent addresses the findings and the chain re-reviews
-focus = ""           # project-specific review focus, appended to every reviewer prompt
-
-[approval]
-mode = "none"        # none | control | all: when a human must approve before commit
-
-[land]
-remote = "origin"
-branch = "main"
-review = "none"      # none | final: an extra review-final pass over the whole branch at land
-
-[routes.review-cheap]
-provider = "claude"  # claude | codex | command
-model = "claude-sonnet-5-5"
-effort = "medium"
-
-[routes.review-final]
-provider = "claude"
-model = "claude-opus-5-5"
-effort = "high"
-
-[routes.fix]
-provider = "claude"
-model = "claude-opus-5-5"
-effort = "high"
-
-[routes.implement]
-provider = "claude"
-model = "claude-opus-5-5"
-effort = "high"
-"""
+TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "config.toml"
 
 
 def _text(value: str) -> str:
@@ -102,11 +58,12 @@ def _init(root: Path) -> dict:
     created = not path.exists()
     if created:
         path.parent.mkdir(exist_ok=True)
-        path.write_text(TEMPLATE)
+        path.write_text(TEMPLATE.read_text())
     ignore = root / ".gitignore"
     lines = ignore.read_text().splitlines() if ignore.exists() else []
-    if configuration.LOCAL not in lines:
-        ignore.write_text("\n".join([*lines, configuration.LOCAL]) + "\n")
+    missing = [pattern for pattern in (configuration.LOCAL, ".worktrees/") if pattern not in lines]
+    if missing:
+        ignore.write_text("\n".join([*lines, *missing]) + "\n")
     return {"status": "ok", "config": str(path), "created": created,
             "next": "fill [gates] with the commands CI runs, then lean-forge commit -m 'Adopt lean-forge'"}
 
@@ -190,6 +147,7 @@ def _dispatch(args, root: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # unwinds so agent process groups are killed
     args = parser().parse_args(argv)
     if args.verb == "hook":
         return hook.main()

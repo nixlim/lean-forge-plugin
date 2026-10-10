@@ -59,13 +59,14 @@ def _env() -> dict:
 
 
 def run_bounded(args, *, cwd: Path, timeout: int, input: str | None = None, **kw) -> subprocess.CompletedProcess:
-    """subprocess.run in a session of its own, so a timeout kills the whole process tree, not just its leader."""
+    """subprocess.run in a session of its own. A timeout, or the run itself being stopped, kills the whole
+    process tree instead of orphaning it."""
     with subprocess.Popen(args, cwd=cwd, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
                           **kw) as proc:
         try:
             out, err = proc.communicate(input, timeout=timeout)
-        except subprocess.TimeoutExpired:
+        except BaseException:
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(proc.pid, signal.SIGKILL)
             proc.communicate()

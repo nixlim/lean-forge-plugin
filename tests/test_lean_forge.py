@@ -27,8 +27,8 @@ def sh(*args, cwd):
     return subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True).stdout
 
 
-def config_text(max_iterations=8, autofix=True, approval="none", land_review="none", git_timeout=120):
-    routes = "".join(f'[routes.{r}]\nprovider = "command"\ncommand = "{FAKE}"\n\n'
+def config_text(max_iterations=8, autofix=True, approval="none", land_review="none", git_timeout=120, command=FAKE):
+    routes = "".join(f'[routes.{r}]\nprovider = "command"\ncommand = "{command}"\n\n'
                      for r in ("review-cheap", "review-final", "fix", "implement"))
     return (f'[gates]\nnot_broken = "test ! -e BROKEN"\n\n[control]\npaths = [".lean-forge/", "AGENTS.md"]\n\n'
             f"[review]\nmax_iterations = {max_iterations}\nautofix = {'true' if autofix else 'false'}\n\n"
@@ -143,6 +143,19 @@ class CommitTests(Base):
         self.assertEqual(git.git("status", "--porcelain", cwd=self.repo).strip(), "?? y.txt")
         self.assertEqual(self.calls(), ["review-final"])
 
+    def test_approval_run_rejects_a_moved_base(self):
+        self.reconfigure(approval="control")
+        (self.repo / "AGENTS.md").write_text("rules\n")
+        self.script({"review-final": [PASS]})
+        out = workflows.commit_unit(self.repo, "add guidance")
+        self.assertEqual(out["status"], "awaiting_approval", out)
+        sh("git", "restore", "--staged", "AGENTS.md", cwd=self.repo)
+        sh("git", "commit", "-q", "--allow-empty", "-m", "move base", cwd=self.repo)
+        done = workflows.approve_run(self.repo, out["run"], "operator")
+        self.assertEqual(done["status"], "error", done)
+        self.assertIn("changed base", done["reason"])
+        self.assertIsNone(evidence.find(self.repo, kind="approval", tree=out["tree"], base=git.head(self.repo)))
+
     def test_restoring_an_earlier_tree_is_reviewed_again(self):
         self.script({"review-cheap": [PASS, PASS, PASS]})
         for text in ("two\n", "three\n", "two\n"):
@@ -204,18 +217,30 @@ class CommitTests(Base):
         tree = git.stage_all(self.repo)
         config, _ = configuration.load(self.repo)
         with self.assertRaises(primitives.Refused):
-            primitives.commit(self.repo, config, tree=tree, role="review-cheap", control=False, message="m")
+            primitives.commit(self.repo, config, tree=tree, message="m")
+
+    def test_control_tree_cannot_commit_with_only_cheap_pass(self):
+        (self.repo / "AGENTS.md").write_text("rules\n")
+        tree = git.stage_all(self.repo)
+        config, _ = configuration.load(self.repo)
+        run = runs.Run(self.repo, "test")
+        self.assertEqual(primitives.gates(self.repo, config, tree, run), [])
+        self.assertEqual(primitives.scan(self.repo, tree, run), [])
+        evidence.add(self.repo, kind="review", tree=tree, base=git.head(self.repo), role="review-cheap",
+                     verdict="PASS", questions=[])
+        with self.assertRaisesRegex(primitives.Refused, "review-final PASS"):
+            primitives.commit(self.repo, config, tree=tree, message="m")
 
     def test_commit_primitive_requires_each_piece_of_evidence(self):
         self.reconfigure(approval="control")
-        (self.repo / "x.txt").write_text("two\n")
+        (self.repo / "AGENTS.md").write_text("rules\n")
         tree = git.stage_all(self.repo)
         config, _ = configuration.load(self.repo)
         run = runs.Run(self.repo, "test")
 
         def refused():
             with self.assertRaises(primitives.Refused) as ctx:
-                primitives.commit(self.repo, config, tree=tree, role="review-final", control=True, message="m")
+                primitives.commit(self.repo, config, tree=tree, message="m")
             return str(ctx.exception)
 
         self.assertIn("gate not_broken", refused())
@@ -227,19 +252,36 @@ class CommitTests(Base):
         evidence.add(self.repo, kind="review", tree=tree, base=base, role="review-cheap", verdict="PASS", questions=[])
         self.assertIn("review-final PASS", refused())  # a cheap PASS never satisfies a control unit
         evidence.add(self.repo, kind="review", tree=tree, base=base, role="review-final", verdict="PASS",
-                      questions=["Sure?"])
+                     questions=["Sure?"])
         self.assertIn("review-final PASS", refused())  # nor does a PASS that asked questions
         evidence.add(self.repo, kind="review", tree=tree, base="0" * 40, role="review-final", verdict="PASS",
-                      questions=[])
+                     questions=[])
         self.assertIn("review-final PASS", refused())  # nor one reviewed against another HEAD
         evidence.add(self.repo, kind="review", tree=tree, base=base, role="review-final", verdict="PASS", questions=[])
         self.assertEqual(refused(), "commit refused; missing evidence: operator approval")
         primitives.approve(self.repo, tree, "operator")
-        (self.repo / "x.txt").write_text("edited after review\n")
+        (self.repo / "AGENTS.md").write_text("edited after review\n")
         self.assertIn("worktree changed after review", refused())
-        (self.repo / "x.txt").write_text("two\n")
-        sha = primitives.commit(self.repo, config, tree=tree, role="review-final", control=True, message="m")
+        (self.repo / "AGENTS.md").write_text("rules\n")
+        sha = primitives.commit(self.repo, config, tree=tree, message="m")
         self.assertEqual(git.git("rev-parse", f"{sha}^{{tree}}", cwd=self.repo).strip(), tree)
+
+    def test_approval_for_another_base_does_not_satisfy_the_same_tree(self):
+        self.reconfigure(approval="control")
+        (self.repo / "AGENTS.md").write_text("rules\n")
+        tree = git.stage_all(self.repo)
+        primitives.approve(self.repo, tree, "operator")
+        old_base = git.head(self.repo)
+        sh("git", "restore", "--staged", "AGENTS.md", cwd=self.repo)
+        sh("git", "commit", "-q", "--allow-empty", "-m", "move base", cwd=self.repo)
+        self.assertNotEqual(git.head(self.repo), old_base)
+        config, _ = configuration.load(self.repo)
+        run = runs.Run(self.repo, "test")
+        self.assertEqual(primitives.gates(self.repo, config, tree, run), [])
+        self.assertEqual(primitives.scan(self.repo, tree, run), [])
+        evidence.add(self.repo, kind="review", tree=tree, base=git.head(self.repo), role="review-final",
+                     verdict="PASS", questions=[])
+        self.assertEqual(primitives.required_evidence(self.repo, config, tree), ["operator approval"])
 
     def test_a_writer_that_moves_head_is_rejected(self):
         (self.repo / "x.txt").write_text("two\n")
@@ -248,6 +290,27 @@ class CommitTests(Base):
         with self.assertRaises(primitives.AgentError) as ctx:
             primitives.work(self.repo, config, runs.Run(self.repo, "test"), role="fix", brief="b")
         self.assertIn("moved HEAD", str(ctx.exception))
+
+    def test_a_writer_that_changes_the_ignored_local_override_is_rejected(self):
+        local = self.repo / configuration.LOCAL
+        local.write_text('[routes.review-cheap]\nmodel = "before"\n')
+        self.script({"fix": [{**FIXED, "_write": {configuration.LOCAL:
+                     '[routes.review-cheap]\nmodel = "after"\n'}}]})
+        config, _ = configuration.load(self.repo)
+        with self.assertRaisesRegex(primitives.AgentError, "changed .lean-forge/local.toml"):
+            primitives.work(self.repo, config, runs.Run(self.repo, "test"), role="fix", brief="b")
+
+    def test_a_reviewer_that_changes_the_ignored_local_override_is_rejected(self):
+        (self.repo / ".gitignore").write_text(configuration.LOCAL + "\n")
+        self.raw_commit(self.repo, "ignore local override")
+        local = self.repo / configuration.LOCAL
+        local.write_text('[routes.review-cheap]\nmodel = "before"\n')
+        (self.repo / "x.txt").write_text("two\n")
+        self.script({"review-cheap": [{**PASS, "_write": {configuration.LOCAL:
+                     '[routes.review-cheap]\nmodel = "after"\n'}}]})
+        out = workflows.commit_unit(self.repo, "change x")
+        self.assertEqual(out["status"], "error", out)
+        self.assertIn("read-only", out["reason"])
 
     def test_guidance_comes_from_the_committed_base_not_the_candidate(self):
         (self.repo / "AGENTS.md").write_text("Committed guidance: never delete tests.\n")
@@ -465,6 +528,46 @@ class ProviderTests(Base):
 
 
 class HookAndEvalTests(Base):
+    def test_hook_reserves_operator_verbs_however_invoked(self):
+        for command in ("lean-forge approve 1", "python3 bin/lean-forge approve 1", "lean-forge -C x halt --off",
+                        "cd a && /opt/lf/bin/lean-forge halt --off"):
+            self.assertTrue(hook.operator_action(command), command)
+        for command in ("lean-forge halt --on stop", 'lean-forge commit -m "approve the plan"', "lean-forge runs"):
+            self.assertFalse(hook.operator_action(command), command)
+        self.assertFalse(hook.writes_history('python3 bin/lean-forge commit -m "fix git push"'))
+
+    def test_stopping_a_run_kills_the_agent_process_group(self):
+        """SIGTERM to the real CLI kills the agent it is waiting on instead of orphaning it."""
+        pidfile = self.tmp / "agent.pid"
+        sleeper = self.tmp / "sleeper.py"
+        sleeper.write_text(f"import os, pathlib, time\npathlib.Path({str(pidfile)!r}).write_text(str(os.getpid()))\n"
+                           "time.sleep(60)\n")
+        self.reconfigure(command=f"{sys.executable} {sleeper}")
+        pid = None
+        try:
+            with subprocess.Popen([sys.executable, str(ROOT / "bin" / "lean-forge"), "-C", str(self.repo), "fix", "b"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as proc:
+                deadline = time.time() + 20
+                while not (pidfile.exists() and pidfile.read_text()) and time.time() < deadline:
+                    time.sleep(0.05)
+                pid = int(pidfile.read_text())
+                proc.terminate()
+                proc.communicate(timeout=10)
+                self.assertEqual(proc.returncode, 143)
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail("the agent subprocess outlived the stopped run")
+        finally:
+            if pid is not None:
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, 9)
+
     def test_hook_classification(self):
         for command in ("git commit -m x", "cd a && git -C b push origin", "/usr/bin/git commit", 'echo "git commit"'):
             self.assertTrue(hook.writes_history(command), command)
@@ -481,6 +584,63 @@ class HookAndEvalTests(Base):
         plain = self.tmp / "plain"
         sh("git", "init", "-q", str(plain), cwd=self.tmp)
         self.assertEqual(decide(plain), "")
+
+    def test_hook_reserves_approval_and_halt_clear_for_the_operator(self):
+        def decision(command):
+            out = io.StringIO()
+            hook.main(io.StringIO(json.dumps({"tool_name": "Bash", "cwd": str(self.repo),
+                                              "tool_input": {"command": command}})), out)
+            return json.loads(out.getvalue()) if out.getvalue() else None
+
+        for command in ("lean-forge approve run-id", "lean-forge halt --off",
+                        "lean-forge -C . approve run-id", "lean-forge halt --on reason; lean-forge halt --off"):
+            self.assertIn("human in their own terminal", decision(command)["hookSpecificOutput"]["permissionDecisionReason"])
+        for command in ("lean-forge halt --on reason", "lean-forge commit -m x", "lean-forge land"):
+            self.assertIsNone(decision(command), command)
+
+    def test_init_ignores_local_overrides_and_worktrees(self):
+        self.assertEqual(cli._init(self.repo)["status"], "ok")
+        ignore = (self.repo / ".gitignore").read_text().splitlines()
+        self.assertEqual(ignore, [configuration.LOCAL, ".worktrees/"])
+        cli._init(self.repo)
+        self.assertEqual((self.repo / ".gitignore").read_text().splitlines(), ignore)
+
+    def test_bootstrap_commits_working_config_and_lands_on_empty_remote(self):
+        origin = self.tmp / "empty.git"
+        repo = self.tmp / "bootstrap"
+        sh("git", "init", "-q", "--bare", "-b", "main", str(origin), cwd=self.tmp)
+        sh("git", "clone", "-q", str(origin), str(repo), cwd=self.tmp)
+        sh("git", "config", "user.name", "Test", cwd=repo)
+        sh("git", "config", "user.email", "test@example.com", cwd=repo)
+        sh("git", "checkout", "-q", "-B", "main", cwd=repo)
+        (repo / ".lean-forge").mkdir()
+        (repo / configuration.CONFIG).write_text(config_text())
+        self.assertIsNone(git.head(repo))
+        self.script({"review-final": [PASS]})
+        committed = workflows.commit_unit(repo, "bootstrap")
+        self.assertEqual(committed["status"], "committed", committed)
+        self.assertEqual(committed["role"], "review-final")
+        landed = workflows.land(repo)
+        self.assertEqual(landed["status"], "landed", landed)
+        self.assertEqual(git.git("ls-remote", str(origin), "main", cwd=repo).split()[0], committed["sha"])
+
+    def test_bootstrap_first_commit_can_be_approved(self):
+        origin = self.tmp / "empty-approval.git"
+        repo = self.tmp / "bootstrap-approval"
+        sh("git", "init", "-q", "--bare", "-b", "main", str(origin), cwd=self.tmp)
+        sh("git", "clone", "-q", str(origin), str(repo), cwd=self.tmp)
+        sh("git", "config", "user.name", "Test", cwd=repo)
+        sh("git", "config", "user.email", "test@example.com", cwd=repo)
+        sh("git", "checkout", "-q", "-B", "main", cwd=repo)
+        (repo / ".lean-forge").mkdir()
+        (repo / configuration.CONFIG).write_text(config_text(approval="control"))
+        self.assertIsNone(git.head(repo))
+        self.script({"review-final": [PASS]})
+        out = workflows.commit_unit(repo, "bootstrap")
+        self.assertEqual(out["status"], "awaiting_approval", out)
+        done = workflows.approve_run(repo, out["run"], "operator")
+        self.assertEqual(done["status"], "committed", done)
+        self.assertEqual(git.git("rev-parse", "HEAD^{tree}", cwd=repo).strip(), out["tree"])
 
     def test_cli_reports_missing_inputs_as_json(self):
         for argv in (["runs", "no-such-run"], ["commit", "-m", "@" + str(self.tmp / "missing.txt")]):

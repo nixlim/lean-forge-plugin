@@ -1,0 +1,44 @@
+# lean-forge configuration. Committed; read from the remote base tip, then HEAD.
+# Per-developer model choices go in .lean-forge/local.toml (route model and effort only, uncommitted).
+
+[gates]
+# Named shell commands, run in order on every candidate. All must exit 0.
+# test = "python3 -m pytest -q"
+# lint = "ruff check ."
+
+[control]
+# Paths whose changes get the binding review-final reviewer (and approval, if mode = "control").
+paths = [".lean-forge/", ".claude/", ".codex/", ".github/", "AGENTS.md", "CLAUDE.md"]
+
+[review]
+max_iterations = 8   # review-and-fix rounds before asking for direction
+autofix = true       # on BLOCK, a fix agent addresses the findings and the chain re-reviews
+focus = ""           # project-specific review focus, appended to every reviewer prompt
+
+[approval]
+mode = "none"        # none | control | all: when a human must approve before commit
+
+[land]
+remote = "origin"
+branch = "main"
+review = "none"      # none | final: an extra review-final pass over the whole branch at land
+
+[routes.review-cheap]
+provider = "claude"  # claude | codex | command
+model = "claude-sonnet-5-5"
+effort = "medium"
+
+[routes.review-final]
+provider = "claude"
+model = "claude-opus-5-5"
+effort = "high"
+
+[routes.fix]
+provider = "claude"
+model = "claude-opus-5-5"
+effort = "high"
+
+[routes.implement]
+provider = "claude"
+model = "claude-opus-5-5"
+effort = "high"
