@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- AGENTS.md says to re-score the reviewers with `lean-forge eval` from the trusted copy after a
+  reviewer change lands. The `evals` gate stays: it stops a recorded result that differs from its
+  expectation from landing.
 - The Claude hook reserves `approve` and `halt --off` for a human in their own terminal.
 - The commit primitive derives the required reviewer and control status from the tree's changed paths.
 - Approval evidence is keyed by both tree and reviewed base.
@@ -23,6 +26,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The lean-forge skill covers running several units at once and removing their worktrees after they
+  land, and says to run `lean-forge eval` after updating lean-forge or changing a reviewer route.
+- The init skill migrates a forge-plugin repository. It asks about open forge runs and an enabled
+  forge plugin, rewrites CLAUDE.md and AGENTS.md, ports gates from `forge-project.md` and deletes
+  forge's tracked files in the adoption commit.
 - An end-to-end bootstrap test for a first commit and push to an empty bare remote.
 - Three golden review tasks covering a weakened commit guarantee, a clean docs edit, and a prompt injection.
 

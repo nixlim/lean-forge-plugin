@@ -40,7 +40,24 @@ halted, 2 needs_direction, 3 awaiting_approval.
 5. **Land.** When the units are done, run `lean-forge land`. It rebases onto the remote base under a
    lock, re-runs the gates and fast-forward pushes. A rebase conflict returns `needs_direction`:
    resolve it yourself when the right combination is clear from the code, otherwise ask.
-6. **Clean up** the worktree once the outcome is `landed`.
+6. **Clean up** once the outcome is `landed`: from the main checkout, `git worktree remove
+   .worktrees/<topic>` and `git branch -d agent/<topic>`.
+
+## Running several units at once
+
+Give each independent unit its own worktree and branch, as in step 1, and run its `implement` and
+`commit` in the background. One run per worktree: two runs in the same worktree overwrite each
+other's edits.
+
+- **Land each unit when it commits.** Lands take turns on a lock. Each one rebases onto whatever
+  landed before it and re-runs the gates. A conflict returns `needs_direction`.
+- **Unless `[land].review` is set, only the gates check units against each other.** Each review saw
+  the base its unit started from. Units that touch the same code belong in one worktree, one after
+  the other.
+- **A land that waits more than five minutes for the lock returns `error`.** Rerun it.
+- **Every unit runs its own agents and gates at the same time.** Run only as many as the machine and
+  the budget can take.
+- **Clean up each worktree as its unit lands,** as in step 6.
 
 ## Rules
 
@@ -52,5 +69,7 @@ halted, 2 needs_direction, 3 awaiting_approval.
 - Reruns are cheap and safe: evidence for an unchanged tree is reused, so a rerun skips gates and
   reviews that already passed.
 - `lean-forge runs` is the dashboard. `lean-forge runs <id>` shows every step with time and cost.
+- After updating lean-forge or changing a reviewer route, run `lean-forge eval` if the repository has
+  golden tasks. A result that differs from `expected` means the reviewers regressed; tell the human.
 - `lean-forge review` reviews the current state without committing. `lean-forge config` shows the
   resolved configuration and which ref it came from.

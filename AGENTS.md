@@ -18,6 +18,13 @@ an existing primitive already covers it.
 - **Tests are end to end.** They drive real git repositories and a bare origin through the scripted
   fake agent in `tests/fake_agent.py`. A new control needs a test that fails when the control is
   removed.
+- **Re-score the reviewers after changing them.** Once a change to `prompts/`, `rules/` or the code
+  that launches reviewers (`lean_forge/providers.py`, `lean_forge/primitives.py`) lands, fast-forward
+  the trusted copy and run `lean-forge eval` from it. `eval` scores the prompts of the copy that runs
+  it. A result that differs from `expected` is a reviewer regression to fix before the next unit. A
+  fixture whose diff no longer applies needs regenerating against HEAD. Commit a changed `.result`
+  through the chain. The `evals` gate (`eval --check`) blocks any `.result` that differs from
+  `expected`, so a regression cannot be recorded and landed as if it were fine.
 - **Commit and land through lean-forge itself, but a trusted copy of it:** the installed plugin or a
   checkout of origin/main, never this worktree's `bin/lean-forge`. The worktree is the candidate, and
   a candidate that edits the engine, prompts or rules must not be judged by its own edits. For
