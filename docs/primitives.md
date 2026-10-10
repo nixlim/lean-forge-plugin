@@ -11,7 +11,7 @@ records append-only evidence (see [records](records.md)).
 | classify | | Picks the reviewer a tree needs: `review-final` if any changed path is under `[control].paths`, otherwise `review-cheap`. |
 | stage | | `git add -A` and `write-tree`: the tree id every later step acts on. |
 | gates | | Runs each configured gate in the worktree. A gate that passed for the same tree and command is skipped. |
-| scan | | Flags added lines that look like credentials, reported as `path:line`, never the match. |
+| scan | | Flags added lines that look like credentials, reported as `path:line`, never the match. Eval fixtures are exempt. |
 | review | `review` | A fresh reviewer judges exactly `git diff <base> <tree>`. `--role` forces a role. |
 | fix | `fix` | The fix agent edits the worktree to address findings (text or `@file`). |
 | implement | `implement` | The implement agent carries out a brief (text or `@file`) in the worktree. |
@@ -49,7 +49,7 @@ cap:
 2. Run the gates. A failure becomes the round's findings.
 3. Scan for secrets. A hit returns `blocked`; remove it and rerun.
 4. Review with a fresh reviewer. Control paths get `review-final`; everything else gets `review-cheap`.
-5. On BLOCK, the fix agent addresses the findings and the next round starts.
+5. After a gate failure or a BLOCK, the fix agent addresses the findings and the next round starts.
 
 The cap is `[review].max_iterations`, 8 by default. Reaching it returns `needs_direction`. A reviewer
 or fix agent that asks a question also returns `needs_direction`. If approval is configured for the
@@ -80,8 +80,8 @@ protocol.
 
 ## Outcomes
 
-Every verb prints one JSON outcome on stdout and a one-line summary on stderr. The exit code follows
-the status:
+Every verb except `hook` and `version` prints one JSON outcome on stdout. All but `runs`, `config`,
+`init` and `halt` also print a one-line summary on stderr. The exit code follows the status:
 
 | `status` | Exit | Meaning |
 |---|---|---|

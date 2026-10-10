@@ -3,8 +3,9 @@
 The `lean-forge-init` skill detects a forge-plugin repository (`forge-project.md` or
 `.forge-manifest`) and walks through these steps. This page explains them.
 
-The two plugins do not collide mechanically. lean-forge reads only `.lean-forge/` and keeps its state
-in `.git/lean-forge/`. It never reads `.forge/`, `forge-project.md` or the manifest. The trouble is
+The two plugins do not collide mechanically. lean-forge reads its configuration only from
+`.lean-forge/`, plus AGENTS.md and CLAUDE.md as reviewer guidance, and keeps its state in
+`.git/lean-forge/`. It never reads `.forge/`, `forge-project.md` or the manifest. The trouble is
 what forge-plugin leaves in the repository.
 
 ## What goes wrong if you just switch
