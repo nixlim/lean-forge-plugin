@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -218,6 +219,7 @@ def evals(root: Path, ids: list[str] | None = None) -> dict:
                         summary=verdict["summary"], findings=verdict["findings"])
             finally:
                 git.git("worktree", "remove", "--force", str(scratch), cwd=root, check=False)
+                shutil.rmtree(scratch.parent, ignore_errors=True)
         ok = all(r.get("got") == r.get("expected") for r in results.values())
         return run.finish("evaluated", results=results, ok=ok)
     except FAILURES as exc:

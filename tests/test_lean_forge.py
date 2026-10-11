@@ -5,6 +5,7 @@ import fcntl
 import io
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -42,6 +43,7 @@ def config_text(max_iterations=8, autofix=True, approval="none", land_review="no
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="lean-forge-test-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.origin = self.tmp / "origin.git"
         sh("git", "init", "-q", "--bare", "-b", "main", str(self.origin), cwd=self.tmp)
         self.repo = self.clone("work")
@@ -813,8 +815,12 @@ class HookAndEvalTests(Base):
         (evals / "planted.md").write_text(f"---\nrole: review-cheap\nexpected: BLOCK\n---\n\n```diff\n{diff}```\n")
         self.raw_commit(self.repo, "add fixture")
         self.script({"review-cheap": [BLOCK]})
-        out = workflows.evals(self.repo)
+        scratch = self.tmp / "scratch"
+        scratch.mkdir()
+        with mock.patch.object(tempfile, "tempdir", str(scratch)):
+            out = workflows.evals(self.repo)
         self.assertEqual((out["status"], out["ok"]), ("evaluated", True), out)
+        self.assertEqual(list(scratch.iterdir()), [])  # the scratch worktree and its temp dir are gone
         self.assertEqual(workflows.eval_check(self.repo)["status"], "ok")
         (evals / "planted.result").write_text("PASS\n")
         self.assertEqual(workflows.eval_check(self.repo)["status"], "blocked")

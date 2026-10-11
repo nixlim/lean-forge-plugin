@@ -58,6 +58,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The test suite removes its temporary directories, and `eval` removes its scratch directory. Both
+  were left in `/tmp`, one per test and one per fixture, and on a shared host thousands of them used
+  up the tmpfs inodes.
 - The init skill says that `init` also adds `.worktrees/` to `.gitignore` and never overwrites an
   existing configuration.
 - Stopping a run (SIGTERM or Ctrl-C) now kills its gate or agent process group instead of orphaning it.
