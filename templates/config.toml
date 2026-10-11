@@ -24,6 +24,8 @@ remote = "origin"
 branch = "main"
 review = "none"      # none | final: an extra review-final pass over the whole branch at land
 
+# review-cheap is the only review for paths outside [control].paths, usually most of the code.
+# Sonnet is the cost default; the init skill recommends claude-opus-5-5 at high effort.
 [routes.review-cheap]
 provider = "claude"  # claude | codex | command
 model = "claude-sonnet-5-5"

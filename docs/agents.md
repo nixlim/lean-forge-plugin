@@ -4,7 +4,7 @@
 
 | Role | When it runs | Writes? |
 |---|---|---|
-| `review-cheap` | `commit` review of a candidate with no control paths | No |
+| `review-cheap` | `commit` review of a candidate with no control paths; the only review those changes get ([choosing its model](configuration.md#who-reviews-ordinary-code)) | No |
 | `review-final` | `commit` review of a candidate that touches a control path; the land review when `[land].review = "final"`; `eval` for fixtures that name it | No |
 | `fix` | After a gate failure or a BLOCK in `commit`, when `autofix` is on; `lean-forge fix` | Yes |
 | `implement` | `lean-forge implement "<brief>"` | Yes |

@@ -54,9 +54,13 @@ files.
    reviewer.
 4. **Write `[review].focus`.** Give three to six bullets naming this project's real failure modes and
    conventions. Mine them from the git history (fix and revert commits) and from the docs.
-5. **Set routes.** The defaults use Claude. If `codex` is installed and the human wants it, Codex
-   makes a good cheap first-pass reviewer (`[routes.review-cheap]`). Keep `review-final` on a strong
-   model. Per-developer overrides go in `.lean-forge/local.toml`.
+5. **Set routes.** `review-cheap` is the only review that code outside `[control].paths` gets, which
+   is usually most of the source. Ask the human which model should review ordinary code, defaulting
+   to Opus (`provider = "claude"`, `model = "claude-opus-5-5"`, `effort = "high"`). Name the
+   cheaper choices: Sonnet, or Codex if it is installed. Name the other two ways to strengthen it:
+   adding source folders to `[control].paths`, or `[land].review = "final"`. Keep `review-final`,
+   `fix` and `implement` on strong models. Per-developer model and effort overrides go in
+   `.lean-forge/local.toml`. The reference is `${CLAUDE_PLUGIN_ROOT}/docs/configuration.md`.
 6. **Leave approval off** (`mode = "none"`) unless the human asks for it. The system is meant to run
    autonomously and ask only for direction.
 7. **Optionally seed evals.** Add two or three golden tasks under `.lean-forge/evals/`: a planted bug

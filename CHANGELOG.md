@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The init skill asks which model reviews ordinary code, defaulting to Opus, because `review-cheap`
+  is the only review for paths outside `[control].paths`. It no longer calls Codex a good cheap
+  first pass. `docs/configuration.md` explains the three ways to give ordinary code a stronger
+  review.
 - The README is now a short overview. The reference moved to `docs/`: primitives, configuration,
   agents, records and the dashboard, parallel units, evals, operating, and migrating from
   forge-plugin.
