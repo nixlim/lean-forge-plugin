@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The lean-forge skill makes one run per worktree at a time a rule: before starting another
+  `implement`, `fix`, `commit` or `land` in a worktree, or editing its files by hand, wait for the
+  previous run's outcome or stop it. Two overlapping runs in one worktree reviewed and committed each
+  other's half-finished changes. `docs/parallel.md` no longer says the commit checks prevent this:
+  they stop a tree that changes after review, not a reviewed tree that holds another run's edits.
 - The init skill asks which model reviews ordinary code, defaulting to Opus, because `review-cheap`
   is the only review for paths outside `[control].paths`. It no longer calls Codex a good cheap
   first pass. `docs/configuration.md` explains the three ways to give ordinary code a stronger

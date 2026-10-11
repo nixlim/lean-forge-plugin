@@ -26,9 +26,12 @@ orchestrator is your Claude Code session, or any script, launching `lean-forge i
 
 ## What to watch
 
-- **One run per worktree.** Two runs in one worktree share the index and the files. The
-  compare-and-swap and the "worktree changed after review" check make the commit fail rather than
-  commit the wrong tree, but the agents overwrite each other's edits.
+- **One run per worktree at a time.** Two runs in one worktree share the index and the files, and
+  nothing stops a second `commit`, `fix`, `implement` or `land` from starting there. The "worktree
+  changed after review" check and the compare-and-swap on HEAD make a commit fail when the files
+  change after its review. They do not stop a run from reviewing, and then committing, a tree that
+  holds another run's half-finished edits. Before you start another run in a worktree, or edit its
+  files yourself, wait for the previous run's outcome or stop it.
 - **Changes that are fine apart but break together.** Each unit is reviewed against the base it
   started from. When another unit lands first, `land` re-runs the gates but not the review, so only a
   gate can catch the clash. Set `[land].review = "final"` to re-review at land, at the cost of one

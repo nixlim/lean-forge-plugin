@@ -25,6 +25,7 @@ halted, 2 needs_direction, 3 awaiting_approval.
    its summary as a claim: read the diff before moving on.
 3. **Commit the unit.** `lean-forge commit -m "<why and what>"` commits the whole worktree state.
    A review round takes minutes, so run it in the background and wait for it rather than polling.
+   Leave the worktree alone until it returns: one run per worktree at a time (see Rules).
 4. **Act on the outcome:**
 
    | `status` | What you do |
@@ -46,8 +47,7 @@ halted, 2 needs_direction, 3 awaiting_approval.
 ## Running several units at once
 
 Give each independent unit its own worktree and branch, as in step 1, and run its `implement` and
-`commit` in the background. One run per worktree: two runs in the same worktree overwrite each
-other's edits.
+`commit` in the background. Each worktree still takes one run at a time (see Rules).
 
 - **Land each unit when it commits.** Lands take turns on a lock. Each one rebases onto whatever
   landed before it and re-runs the gates. A conflict returns `needs_direction`.
@@ -62,6 +62,13 @@ other's edits.
 ## Rules
 
 - Never run `git commit` or `git push` yourself. The hook denies it in lean-forge repositories.
+- Run one lean-forge run per worktree at a time. Before you start another `implement`, `fix`,
+  `commit` or `land` in a worktree, or edit its files yourself, wait for the previous run's outcome
+  or stop that run. Its implement and fix agents edit the same files, so two runs in one tree review
+  and commit each other's half-finished changes. A run has finished when its command prints its
+  outcome. Stopping it with SIGTERM or Ctrl-C also stops its agents and gates; read the diff before
+  you continue, because its agent may have left edits behind. A `running` row in `lean-forge runs`
+  is no proof the run is alive: a killed run shows `running` forever.
 - Never edit lean-forge state under the git directory (`lean-forge/` evidence, runs and halt), and
   never clear a halt.
 - Never weaken a gate, a test or a reviewer prompt to get a PASS. The reviewer blocks it and the
