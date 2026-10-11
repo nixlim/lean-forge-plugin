@@ -64,10 +64,11 @@ real failure modes work best. lean-forge's own focus is in `.lean-forge/config.t
 
 The roles are `review-cheap`, `review-final`, `fix` and `implement` (see [agents](agents.md)). The
 template routes all four to Claude: `claude-sonnet-5-5` at medium effort for `review-cheap`, and
-`claude-opus-5-5` at high effort for the rest. The template and the built-in defaults keep Sonnet on
-`review-cheap` as the cost default; the init skill asks and recommends Opus (see below). lean-forge's own repository routes `review-cheap` to
-Codex `gpt-5.6-terra`, `review-final` and `fix` to Claude `claude-opus-5-5`, and `implement` to Codex
-`gpt-6-sol`. Almost every path there is a control path, so `review-final` judges nearly everything.
+`claude-opus-5-5` at high effort for the rest. Sonnet on `review-cheap` is the cost default; the
+init skill asks and recommends Opus (see below). lean-forge's own repository routes `review-cheap`
+to Codex `gpt-5.6-terra`, `review-final` and `fix` to Claude `claude-opus-5-5`, and `implement` to
+Codex `gpt-6-sol`. Almost every path there is a control path, so `review-final` judges nearly
+everything.
 
 ## Who reviews ordinary code
 
@@ -85,20 +86,18 @@ that route as carefully as `review-final`. Three settings give ordinary code a s
    ```
 
    This upgrades the model, not the prompt. Both reviewer roles get the same review constitution,
-   but their prompts carry different ground rules. Only `review-final` has the control-integrity
-   rule that makes deleting or loosening a test, suppressing a check or narrowing a gate a CRITICAL
-   finding, and it still applies only to changes under `[control].paths`. With the template's
-   control list, tests are not control paths, so an Opus `review-cheap` reviews them without that
-   rule. To apply it to tests or source, add those folders to the control list (option 2).
-   `local.toml` can change a route's model and effort but not its provider, so moving off Codex
-   needs a committed configuration change. That change touches `.lean-forge/`, so it gets
-   `review-final`.
+   but only the `review-final` prompt has the control-integrity rule, which makes deleting or
+   loosening a test, suppressing a check or narrowing a gate a CRITICAL finding. An Opus
+   `review-cheap` reviews without that rule. Options 2 and 3 bring it to ordinary code.
+   `local.toml` can change a route's model and effort but not its provider, so changing a
+   provider needs a committed configuration change. That change touches `.lean-forge/`, so it
+   gets `review-final`.
 2. **Add source folders to the control list**, for example `paths = [..., "src/", "lib/"]`. Entries
    are prefix matches. Those paths then get `review-final`, and the rest stay on `review-cheap`. With
    `approval.mode = "control"` they would also need human approval. The default mode is `none`, so
    normally nothing else changes.
-3. **Set `[land].review = "final"`.** This adds one `review-final` over the whole branch at land, on
-   top of each commit's review. `land` has no fix loop, so a BLOCK there means fix, commit again and
+3. **Set `[land].review = "final"`.** This adds one `review-final`, with its control-integrity rule,
+   over the whole branch at land, on top of each commit's review. `land` has no fix loop, so a BLOCK there means fix, commit again and
    land again.
 
 There is no two-stage review, a cheap pass followed by a final one on the same commit, and no
