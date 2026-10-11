@@ -72,6 +72,14 @@ message and rerun.
 
 A land that waits more than five minutes for the lock returns `error`; rerun it.
 
+## One run per worktree
+
+`implement`, `fix`, `review`, `commit`, `land` and `eval` hold their worktree until they write their
+outcome. A second one in the same worktree returns `error` naming the run in flight. Other worktrees
+are unaffected. A stopped or killed run frees its worktree at once. SIGTERM, Ctrl-C and a closed
+terminal also stop its agents and gates; SIGKILL does not. A run started under `nohup` (SIGHUP
+ignored) keeps running when its terminal closes. See [parallel units](parallel.md).
+
 ## Reruns
 
 Gates and reviews that already passed for an unchanged tree are skipped, so a rerun costs nothing

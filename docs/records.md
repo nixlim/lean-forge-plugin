@@ -55,7 +55,8 @@ Only the eval `.result` files, and git history itself.
 - **A decision journal, telemetry, drift history, retention or pruning.** The files grow forever, and
   each evidence lookup reads the whole file. That is fine at this scale.
 - **Interrupted runs.** A run that is killed writes no outcome, so the dashboard shows it as `running`
-  forever.
+  forever. Its worktree lock dies with its process. After SIGKILL its agents and gates may still be
+  running, so stop them before reusing the worktree.
 
 ## Provenance belongs to one clone
 

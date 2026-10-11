@@ -15,12 +15,10 @@ from pathlib import Path
 from lean_forge import __version__, git, hook, runs, workflows
 from lean_forge import config as configuration
 from lean_forge.primitives import classify, halt_reason, review, work
-from lean_forge.providers import AgentError
 from lean_forge.runs import Run
 
 EXIT = {"needs_direction": 2, "awaiting_approval": 3}
 OK = {"committed", "landed", "evaluated", "noop", "ok", "reviewed", "done", "halt"}
-FAILURES = (AgentError, git.GitError, configuration.ConfigError)
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "config.toml"
 
@@ -32,24 +30,26 @@ def _text(value: str) -> str:
 def _agent_verb(root: Path, role: str, brief: str) -> dict:
     run = Run(root, role)
     try:
+        run.hold()
         config, _ = configuration.load(root)
         if reason := halt_reason(root):
             return run.finish("halted", reason=reason)
         out = work(root, config, run, role=role, brief=brief)
         return run.finish("needs_direction" if out["questions"] else "done", **out)
-    except FAILURES as exc:
+    except workflows.FAILURES as exc:
         return run.finish("error", reason=str(exc))
 
 
 def _review_verb(root: Path, role: str | None) -> dict:
     run = Run(root, "review")
     try:
+        run.hold()
         config, _ = configuration.load(root)
         tree = git.stage_all(root)
         unit = classify(config, git.changed_paths(root, tree))
         verdict = review(root, config, run, tree=tree, role=role or unit["role"])
         return run.finish("needs_direction" if verdict["questions"] else "reviewed", tree=tree, **verdict)
-    except FAILURES as exc:
+    except workflows.FAILURES as exc:
         return run.finish("error", reason=str(exc))
 
 
@@ -148,7 +148,9 @@ def _dispatch(args, root: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # unwinds so agent process groups are killed
+    for stop in (signal.SIGTERM, signal.SIGHUP):  # unwind, so agent process groups are killed, even on a closed terminal
+        if signal.getsignal(stop) is not signal.SIG_IGN:  # but a run started under nohup keeps running
+            signal.signal(stop, lambda signum, _: sys.exit(128 + signum))
     args = parser().parse_args(argv)
     if args.verb == "hook":
         return hook.main()

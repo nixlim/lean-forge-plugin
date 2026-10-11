@@ -22,22 +22,30 @@ orchestrator is your Claude Code session, or any script, launching `lean-forge i
 - **Lands take turns.** They queue on one lock. Each land fetches, rebases onto whatever landed
   before it, re-runs the gates on the result and fast-forward pushes. A conflict returns
   `needs_direction`.
+- **One run per worktree.** `implement`, `fix`, `review`, `commit`, `land` and `eval` hold a kernel
+  lock in their worktree's own git directory until they write their outcome. A second run in that
+  worktree returns `error` naming the run in flight. The lock dies with its process, so it never goes
+  stale. `eval --check` does not take it, so it still works as a gate; a gate that runs one of the
+  locked verbs in its own worktree is refused. `approve` stages the run's worktree before its commit
+  takes the lock, so do not approve while another run is in flight there.
 - **`halt` stops every worktree at once.**
 
 ## What to watch
 
-- **One run per worktree at a time.** Two runs in one worktree share the index and the files, and
-  nothing stops a second `commit`, `fix`, `implement` or `land` from starting there. The "worktree
-  changed after review" check and the compare-and-swap on HEAD make a commit fail when the files
-  change after its review. They do not stop a run from reviewing, and then committing, a tree that
-  holds another run's half-finished edits. Before you start another run in a worktree, or edit its
-  files yourself, wait for the previous run's outcome or stop it.
+- **Your own edits during a run.** The lock covers lean-forge runs, not your editor. A run's
+  implement and fix agents edit the worktree, and the "worktree changed after review" check only
+  refuses a tree that changes after its review. A run can still review, and then commit, half-finished
+  edits made while it ran. Wait for a run's outcome, or stop it, before editing its worktree.
+- **How a run is stopped matters.** SIGTERM, Ctrl-C or a closed terminal (SIGHUP) stops the run's
+  agents and gates with it. A run started under `nohup` (SIGHUP ignored) keeps running when its
+  terminal closes. After SIGKILL the worktree is free at once, but the run's agents and
+  gates can outlive it and keep editing. Stop them before you rerun or edit there.
 - **Changes that are fine apart but break together.** Each unit is reviewed against the base it
   started from. When another unit lands first, `land` re-runs the gates but not the review, so only a
   gate can catch the clash. Set `[land].review = "final"` to re-review at land, at the cost of one
   `review-final` per land. Units that touch the same code belong in one worktree, one after the
   other.
-- **The land lock times out after five minutes** with "land lock held by another session". With slow
+- **The land lock times out after five minutes** with "the land lock is held by run <id>". With slow
   gates and several lands queued, some fail and need a rerun.
 - **There are no concurrency limits.** Five parallel units means five reviewers or fixers at once and
   five gate runs competing for CPU. On a shared host, wrap heavy gate commands in your host's slot

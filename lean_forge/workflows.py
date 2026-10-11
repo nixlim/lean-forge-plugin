@@ -8,12 +8,9 @@ Re-running a workflow is always safe: steps whose evidence already exists for th
 
 from __future__ import annotations
 
-import fcntl
 import json
 import re
 import tempfile
-import time
-from contextlib import contextmanager
 from pathlib import Path
 
 from lean_forge import config as configuration
@@ -37,6 +34,7 @@ def commit_unit(root: Path, message: str, *, autofix: bool | None = None) -> dic
     run = Run(root, "commit", subject=message.strip().splitlines()[0][:120] if message.strip() else "")
     (run.dir / "message.txt").write_text(message)
     try:
+        run.hold()
         config, source = configuration.load(root)
         run.log("config", source=source)
         if reason := halt_reason(root):
@@ -120,25 +118,11 @@ def approve_run(root: Path, run_id: str, by: str) -> dict:
     return commit_unit(worktree, (outcome_path.parent / "message.txt").read_text())
 
 
-@contextmanager
-def _lock(path: Path, timeout: int = 300):
-    with open(path, "w") as fh:
-        deadline = time.time() + timeout
-        while True:
-            try:
-                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.time() > deadline:
-                    raise Refused(f"land lock held by another session for {timeout}s") from None
-                time.sleep(2)
-        yield
-
-
 def land(root: Path, *, allow_outside: bool = False) -> dict:
     """Rebase onto the remote base under a lock, re-run the gates on the result, fast-forward push."""
     run = Run(root, "land")
     try:
+        run.hold()
         config, source = configuration.load(root)
         run.log("config", source=source)
         if reason := halt_reason(root):
@@ -160,36 +144,36 @@ def land(root: Path, *, allow_outside: bool = False) -> dict:
             return run.finish("needs_direction", stage="provenance", commits=outside, questions=[(
                 f"{len(outside)} commit(s) were made outside `lean-forge commit` and never went through the chain. "
                 "Land them anyway (`lean-forge land --allow-outside-commits`), or redo them through the chain?")])
-        with _lock(git.state_dir(root) / "land.lock"):
-            pulled = 0
-            if exists:
-                git.git("fetch", "-q", remote, base, cwd=root, timeout=net)
-                pulled = int(git.git("rev-list", "--count", f"HEAD..{base_ref}", cwd=root).strip())
-                if pulled and not git.succeeds("rebase", "-q", base_ref, cwd=root):
-                    git.git("rebase", "--abort", cwd=root, check=False)
-                    return run.finish("needs_direction", stage="rebase", questions=[(
-                        f"Rebasing onto {base_ref} conflicts. Resolve it in this worktree (rebase, then rerun "
-                        "`lean-forge land`), or tell me how the two changes should combine.")])
-            # The base just fetched is the authority: its gates and land settings judge the rebased tree.
-            config, source = configuration.load(root)
-            run.log("config", source=source, reloaded=True)
-            tree = git.git("rev-parse", "HEAD^{tree}", cwd=root).strip()
-            failures = gates(root, config, tree, run)
-            if failures:
-                return run.finish("blocked", stage="gates", tree=tree, failures=failures, pulled=pulled)
-            if config["land"]["review"] != "none":
-                # Never cached: a commit-time PASS for this tree reviewed one unit, not base...HEAD.
-                since = git.git("merge-base", base_ref, "HEAD", cwd=root).strip() if base_ref else git.EMPTY_TREE
-                verdict = review(root, config, run, tree=tree, role="review-final", record=False, since=since)
-                if verdict["questions"]:
-                    return run.finish("needs_direction", stage="land-review", questions=verdict["questions"],
-                                      findings=verdict["findings"])
-                if verdict["verdict"] != "PASS":
-                    return run.finish("blocked", stage="land-review", findings=verdict["findings"])
-            if not git.succeeds("push", "-q", remote, f"HEAD:refs/heads/{base}", cwd=root, timeout=net):
-                return run.finish("blocked", stage="push", reason="the remote rejected the push (it may have moved); rerun land")
-            sha = git.head(root)
-            evidence.add(root, kind="land", sha=sha, tree=tree, onto=f"{remote}/{base}")
+        run.hold(git.state_dir(root) / "land.lock", wait=300, what="the land lock")
+        pulled = 0
+        if exists:
+            git.git("fetch", "-q", remote, base, cwd=root, timeout=net)
+            pulled = int(git.git("rev-list", "--count", f"HEAD..{base_ref}", cwd=root).strip())
+            if pulled and not git.succeeds("rebase", "-q", base_ref, cwd=root):
+                git.git("rebase", "--abort", cwd=root, check=False)
+                return run.finish("needs_direction", stage="rebase", questions=[(
+                    f"Rebasing onto {base_ref} conflicts. Resolve it in this worktree (rebase, then rerun "
+                    "`lean-forge land`), or tell me how the two changes should combine.")])
+        # The base just fetched is the authority: its gates and land settings judge the rebased tree.
+        config, source = configuration.load(root)
+        run.log("config", source=source, reloaded=True)
+        tree = git.git("rev-parse", "HEAD^{tree}", cwd=root).strip()
+        failures = gates(root, config, tree, run)
+        if failures:
+            return run.finish("blocked", stage="gates", tree=tree, failures=failures, pulled=pulled)
+        if config["land"]["review"] != "none":
+            # Never cached: a commit-time PASS for this tree reviewed one unit, not base...HEAD.
+            since = git.git("merge-base", base_ref, "HEAD", cwd=root).strip() if base_ref else git.EMPTY_TREE
+            verdict = review(root, config, run, tree=tree, role="review-final", record=False, since=since)
+            if verdict["questions"]:
+                return run.finish("needs_direction", stage="land-review", questions=verdict["questions"],
+                                  findings=verdict["findings"])
+            if verdict["verdict"] != "PASS":
+                return run.finish("blocked", stage="land-review", findings=verdict["findings"])
+        if not git.succeeds("push", "-q", remote, f"HEAD:refs/heads/{base}", cwd=root, timeout=net):
+            return run.finish("blocked", stage="push", reason="the remote rejected the push (it may have moved); rerun land")
+        sha = git.head(root)
+        evidence.add(root, kind="land", sha=sha, tree=tree, onto=f"{remote}/{base}")
         return run.finish("landed", sha=sha, onto=f"{remote}/{base}", commits=len(ahead), pulled=pulled)
     except FAILURES as exc:
         return run.finish("error", reason=str(exc))
@@ -212,6 +196,7 @@ def evals(root: Path, ids: list[str] | None = None) -> dict:
     """Score golden tasks: stage each fixture's diff in a scratch worktree of HEAD and review it afresh."""
     run = Run(root, "eval")
     try:
+        run.hold()
         config, _ = configuration.load(root)
         results = {}
         for path, meta, diff in _fixtures(root):

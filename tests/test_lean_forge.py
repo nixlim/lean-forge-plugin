@@ -1,15 +1,18 @@
 """End-to-end tests: real git repositories, a bare origin, and the scripted fake agent."""
 
 import contextlib
+import fcntl
 import io
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -515,6 +518,19 @@ class LandTests(Base):
         self.assertEqual([f["gate"] for f in out["failures"]], ["x_is_one"])
         self.assertEqual(git.git("ls-remote", "origin", "main", cwd=self.repo).split()[0], git.head(other))
 
+    def test_land_waits_for_the_land_lock_then_refuses_naming_its_holder(self):
+        (self.repo / "x.txt").write_text("two\n")
+        self.script({"review-cheap": [PASS]})
+        self.assertEqual(workflows.commit_unit(self.repo, "change x")["status"], "committed")
+        with open(git.state_dir(self.repo) / "land.lock", "a+") as fh, mock.patch.object(runs.time, "sleep") as slept:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            print("20261011-000000-abcd", file=fh, flush=True)
+            out = workflows.land(self.repo)
+        self.assertEqual(out["status"], "error", out)
+        self.assertIn("the land lock is held by run 20261011-000000-abcd", out["reason"])
+        self.assertEqual(sum(c.args[0] for c in slept.call_args_list), 300)  # five minutes of waiting, then the refusal
+        self.assertEqual(workflows.land(self.repo)["status"], "landed")
+
     def test_land_refuses_a_dirty_worktree(self):
         (self.repo / "x.txt").write_text("dirty\n")
         self.assertEqual(workflows.land(self.repo)["status"], "blocked")
@@ -582,36 +598,117 @@ class HookAndEvalTests(Base):
         self.assertFalse(hook.writes_history('python3 bin/lean-forge commit -m "fix git push"'))
 
     def test_stopping_a_run_kills_the_agent_process_group(self):
-        """SIGTERM to the real CLI kills the agent it is waiting on instead of orphaning it."""
+        """SIGTERM, or SIGHUP from a closed terminal, unwinds the real CLI so it kills the agent it is waiting on."""
         pidfile = self.tmp / "agent.pid"
         sleeper = self.tmp / "sleeper.py"
         sleeper.write_text(f"import os, pathlib, time\npathlib.Path({str(pidfile)!r}).write_text(str(os.getpid()))\n"
                            "time.sleep(60)\n")
         self.reconfigure(command=f"{sys.executable} {sleeper}")
+        for stop in (signal.SIGTERM, signal.SIGHUP):
+            pidfile.unlink(missing_ok=True)
+            pid = None
+            try:
+                with subprocess.Popen([sys.executable, str(ROOT / "bin" / "lean-forge"), "-C", str(self.repo), "fix", "b"],
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as proc:
+                    deadline = time.time() + 20
+                    while not (pidfile.exists() and pidfile.read_text()) and time.time() < deadline:
+                        time.sleep(0.05)
+                    pid = int(pidfile.read_text())
+                    proc.send_signal(stop)
+                    proc.communicate(timeout=10)
+                    self.assertEqual(proc.returncode, 128 + stop, stop)
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    try:
+                        os.kill(pid, 0)
+                    except ProcessLookupError:
+                        break
+                    time.sleep(0.05)
+                else:
+                    self.fail(f"the agent subprocess outlived the run stopped with {stop!r}")
+            finally:
+                if pid is not None:
+                    with contextlib.suppress(ProcessLookupError):
+                        os.kill(pid, 9)
+
+    def test_one_run_per_worktree_at_a_time(self):
+        """A second run in a worktree refuses, naming the run in flight. Other worktrees proceed, and so does a rerun
+        once the first run is stopped: the lock is the kernel's, so it never goes stale."""
+        pidfile, agent = self.tmp / "agent.pid", self.tmp / "agent.py"
+        agent.write_text("import json, os, pathlib, sys, time\n"
+                         "if json.load(sys.stdin)['role'] in ('fix', 'implement'):\n"
+                         f"    pathlib.Path({str(pidfile)!r}).write_text(str(os.getpid()))\n"
+                         "    time.sleep(60)\n"
+                         "print(json.dumps({'verdict': 'PASS', 'findings': [], 'summary': 'ok', 'questions': []}))\n")
+        self.reconfigure(command=f"{sys.executable} {agent}")
+        other = self.tmp / "other"
+        sh("git", "worktree", "add", "-q", "-b", "other", str(other), "origin/main", cwd=self.repo)
+        proc = subprocess.Popen([sys.executable, str(ROOT / "bin" / "lean-forge"), "-C", str(self.repo), "fix", "b"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         pid = None
         try:
-            with subprocess.Popen([sys.executable, str(ROOT / "bin" / "lean-forge"), "-C", str(self.repo), "fix", "b"],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as proc:
+            deadline = time.time() + 20
+            while not (pidfile.exists() and pidfile.read_text()) and time.time() < deadline:
+                time.sleep(0.05)
+            pid = int(pidfile.read_text())
+            first = runs.recent(self.repo)[0]["run"]
+            (self.repo / "x.txt").write_text("two\n")
+            for out in (workflows.commit_unit(self.repo, "change x"), workflows.land(self.repo), workflows.evals(self.repo)):
+                self.assertEqual(out["status"], "error", out)
+                self.assertIn(f"held by run {first}", out["reason"])
+            for argv in (["implement", "x"], ["review"]):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(cli.main(["-C", str(self.repo), *argv]), 1)
+                self.assertIn(f"held by run {first}", json.loads(buf.getvalue())["reason"])
+            (other / "x.txt").write_text("three\n")
+            self.assertEqual(workflows.commit_unit(other, "change x elsewhere")["status"], "committed")
+            proc.terminate()
+            proc.wait(timeout=10)
+            self.assertIsNone(runs.load(self.repo, first)[0])  # killed, so no outcome, and yet the worktree is free
+            self.assertEqual(workflows.commit_unit(self.repo, "change x")["status"], "committed")
+        finally:
+            proc.kill()
+            proc.wait()
+            if pid is not None:
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, 9)
+
+    def test_a_run_started_under_nohup_survives_sighup(self):
+        """An inherited SIG_IGN for SIGHUP is kept, so `nohup lean-forge ...` outlives a closed terminal."""
+        pidfile, sleeper = self.tmp / "agent.pid", self.tmp / "sleeper.py"
+        sleeper.write_text(f"import os, pathlib, time\npathlib.Path({str(pidfile)!r}).write_text(str(os.getpid()))\n"
+                           "time.sleep(60)\n")
+        self.reconfigure(command=f"{sys.executable} {sleeper}")
+        pid = None
+        with subprocess.Popen([sys.executable, str(ROOT / "bin" / "lean-forge"), "-C", str(self.repo), "fix", "b"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              preexec_fn=lambda: signal.signal(signal.SIGHUP, signal.SIG_IGN)) as proc:
+            try:
                 deadline = time.time() + 20
                 while not (pidfile.exists() and pidfile.read_text()) and time.time() < deadline:
                     time.sleep(0.05)
                 pid = int(pidfile.read_text())
+                proc.send_signal(signal.SIGHUP)
+                time.sleep(1)
+                self.assertIsNone(proc.poll(), "a run started under nohup stopped on SIGHUP")
+                os.kill(pid, 0)  # the agent still runs
                 proc.terminate()
-                proc.communicate(timeout=10)
-                self.assertEqual(proc.returncode, 143)
-            deadline = time.time() + 5
-            while time.time() < deadline:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    break
-                time.sleep(0.05)
-            else:
-                self.fail("the agent subprocess outlived the stopped run")
-        finally:
-            if pid is not None:
-                with contextlib.suppress(ProcessLookupError):
-                    os.kill(pid, 9)
+                self.assertEqual(proc.wait(timeout=10), 143)
+            finally:
+                proc.kill()
+                if pid is not None:
+                    with contextlib.suppress(ProcessLookupError):
+                        os.kill(pid, 9)
+
+    def test_a_lock_that_cannot_be_taken_finishes_with_an_error(self):
+        lock = Path(git.git("rev-parse", "--path-format=absolute", "--git-dir", cwd=self.repo).strip()) / "lean-forge.lock"
+        lock.mkdir()
+        (self.repo / "x.txt").write_text("two\n")
+        out = workflows.commit_unit(self.repo, "change x")
+        self.assertEqual(out["status"], "error", out)
+        self.assertIn("cannot lock", out["reason"])
+        self.assertEqual(runs.load(self.repo, out["run"])[0]["status"], "error")  # an outcome, not `running` forever
 
     def test_hook_classification(self):
         for command in ("git commit -m x", "cd a && git -C b push origin", "/usr/bin/git commit", 'echo "git commit"'):

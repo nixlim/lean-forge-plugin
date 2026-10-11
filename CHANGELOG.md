@@ -42,6 +42,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A per-worktree run lock. `implement`, `fix`, `review`, `commit`, `land` and `eval` hold a kernel
+  lock in their worktree's own git directory until they write their outcome, and a second run in that
+  worktree returns `error` naming the run in flight. Other worktrees are unaffected. The lock dies
+  with its process, so it never goes stale; after SIGKILL the run's agents and gates may still be
+  running. `eval --check` does not take it, so it still works as a gate. The land lock now uses the
+  same helper and names the run that holds it.
 - The lean-forge skill covers running several units at once and removing their worktrees after they
   land, and says to run `lean-forge eval` after updating lean-forge or changing a reviewer route.
 - The init skill migrates a forge-plugin repository. It asks about open forge runs and an enabled
@@ -55,6 +61,9 @@ All notable changes to this project are documented here. The format follows
 - The init skill says that `init` also adds `.worktrees/` to `.gitignore` and never overwrites an
   existing configuration.
 - Stopping a run (SIGTERM or Ctrl-C) now kills its gate or agent process group instead of orphaning it.
+- A closed terminal (SIGHUP) now stops a run the same way, so the run's agents no longer keep editing a
+  worktree whose lock has already been released. A run started under `nohup` (SIGHUP ignored) keeps
+  running.
 - The hook recognises operator-only verbs however lean-forge is invoked (`python3 bin/lean-forge approve`).
 - The configuration template lives in `templates/config.toml` instead of being duplicated in the CLI.
   `templates/` is a control path, so edits to the shipped defaults still get review-final.

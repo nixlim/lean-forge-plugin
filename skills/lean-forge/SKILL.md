@@ -35,7 +35,7 @@ halted, 2 needs_direction, 3 awaiting_approval.
    | `needs_direction` | Ask the human the `questions` with AskUserQuestion, offering the options each question names. Act on the answer, then rerun. If the answer needs `approve`, `halt --off` or `land --allow-outside-commits`, ask the human to run it in their own terminal; the hook denies them to you. |
    | `awaiting_approval` | Approval is configured for this change. Tell the human to run `lean-forge approve <run>`. |
    | `halted` | Stop and report the reason. Never clear a halt. |
-   | `error` | Read `reason` (configuration, provider login, a reviewer that tried to write) and fix the cause. |
+   | `error` | Read `reason` (configuration, provider login, a reviewer that tried to write, another run in flight in this worktree) and fix the cause. |
    | `noop` | Nothing to commit or land. |
 
 5. **Land.** When the units are done, run `lean-forge land`. It rebases onto the remote base under a
@@ -62,13 +62,16 @@ Give each independent unit its own worktree and branch, as in step 1, and run it
 ## Rules
 
 - Never run `git commit` or `git push` yourself. The hook denies it in lean-forge repositories.
-- Run one lean-forge run per worktree at a time. Before you start another `implement`, `fix`,
-  `commit` or `land` in a worktree, or edit its files yourself, wait for the previous run's outcome
-  or stop that run. Its implement and fix agents edit the same files, so two runs in one tree review
-  and commit each other's half-finished changes. A run has finished when its command prints its
-  outcome. Stopping it with SIGTERM or Ctrl-C also stops its agents and gates; read the diff before
-  you continue, because its agent may have left edits behind. A `running` row in `lean-forge runs`
-  is no proof the run is alive: a killed run shows `running` forever.
+- Run one lean-forge run per worktree at a time. `implement`, `fix`, `review`, `commit`, `land` and
+  `eval` hold their worktree until they print their outcome, and a second one there returns `error`
+  naming the run in flight: wait for that outcome or stop that run, then rerun. Nothing stops your
+  own edits, so leave the worktree alone while a run is in flight. Its implement and fix agents edit
+  the same files, and the run would review and commit your half-finished changes. Stopping a run with
+  SIGTERM, Ctrl-C or a closed terminal also stops its agents and gates. A run started under `nohup`
+  (SIGHUP ignored) keeps running when its terminal closes. After SIGKILL the worktree is
+  free, but its agents and gates may still be running and editing, so stop them first. Then read the
+  diff before you continue, because an agent may have left edits behind. A `running` row in
+  `lean-forge runs` is no proof the run is alive: a killed run shows `running` forever.
 - Never edit lean-forge state under the git directory (`lean-forge/` evidence, runs and halt), and
   never clear a halt.
 - Never weaken a gate, a test or a reviewer prompt to get a PASS. The reviewer blocks it and the

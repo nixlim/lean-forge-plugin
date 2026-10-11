@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import time
 from pathlib import Path
 
 from lean_forge import git
+from lean_forge.primitives import Refused
 
 
 class Run:
@@ -20,6 +23,7 @@ class Run:
         self.cost_usd = 0.0
         self.tokens = 0
         self.started = time.time()
+        self.held = []
         self.log("start", workflow=workflow, branch=git.branch(root), head=git.head(root), cwd=str(root), **args)
 
     def log(self, step: str, **data) -> None:
@@ -29,6 +33,31 @@ class Run:
         with open(self.dir / "log.jsonl", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, sort_keys=True) + "\n")
 
+    def hold(self, path: Path | None = None, *, wait: int = 0, what: str = "this worktree") -> None:
+        """Flock `path` (default: one run per worktree, in its own git dir) until the outcome is written, or refuse.
+
+        The kernel's lock is the state: the file only names the holder, and a killed run's lock dies with its process."""
+        path = path or Path(git.git("rev-parse", "--path-format=absolute", "--git-dir", cwd=self.root).strip()) / "lean-forge.lock"
+        fh = None
+        try:
+            fh = open(path, "a+")  # append mode, so a refused run cannot wipe the holder's name
+            for attempt in range(wait // 2 + 1):
+                time.sleep(2 if attempt else 0)
+                with contextlib.suppress(BlockingIOError):
+                    fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+            else:
+                with fh:
+                    fh.seek(0)
+                    raise Refused(f"{what} is held by run {fh.read().strip() or '?'}; wait for its outcome or stop it, then rerun")
+            fh.truncate(0)
+            print(self.id, file=fh, flush=True)
+        except OSError as exc:
+            if fh:
+                fh.close()
+            raise Refused(f"cannot lock {path}: {exc}") from None
+        self.held.append(fh)
+
     def finish(self, status: str, **data) -> dict:
         outcome = {
             "run": self.id, "workflow": self.workflow, "status": status,
@@ -37,6 +66,8 @@ class Run:
         }
         self.log("finish", status=status)
         (self.dir / "outcome.json").write_text(json.dumps(outcome, indent=2, sort_keys=True) + "\n")
+        for fh in self.held:  # released only once the outcome exists
+            fh.close()
         return outcome
 
 
