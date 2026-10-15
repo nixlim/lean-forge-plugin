@@ -7,7 +7,7 @@ an existing primitive already covers it.
 - **Evidence, not state.** Effectful primitives check append-only evidence for the exact git tree they
   act on. There is no state machine, no markers, no replay and no crash recovery: any failure means
   rerun. Mechanism that brings those back needs a real incident to justify it.
-- **Keep the core small.** `lean_forge/` stays near 1,100 lines. Growth past about 1,200 is a signal to
+- **Keep the core small.** `lean_forge/` is about 1,200 lines. Growth past about 1,500 is a signal to
   stop and simplify.
 - **Agents are bounded.** Reviewers stay read-only (exact-match tool rules on Claude, never prefix rules; the read-only
   sandbox on Codex, a before-and-after checkout comparison everywhere). Writing agents edit files and

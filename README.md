@@ -10,7 +10,7 @@ asked only for direction, never for permission to commit.
 
 lean-forge is the lean successor to [forge-plugin](https://github.com/nixlim/forge-plugin). It keeps
 the parts that caught real defects (independent review, a hard iteration cap, structured verdicts,
-gates read from committed configuration) and drops the heavyweight guarantees. The core is under
+gates read from committed configuration) and drops the heavyweight guarantees. The core is about
 1,200 lines of standard-library Python.
 
 ## Requirements

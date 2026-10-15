@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- AGENTS.md raises the core-size guideline from about 1,200 to about 1,500 lines, by operator
+  decision on 2026-10-11, after the per-worktree run lock took `lean_forge/` to 1,212 lines. It stays
+  a guideline, not a limit: growth past about 1,500 is still the signal to stop and simplify. The
+  README said the core was under 1,200 lines, which is no longer true; it now says about 1,200.
 - The lean-forge skill makes one run per worktree at a time a rule: before starting another
   `implement`, `fix`, `commit` or `land` in a worktree, or editing its files by hand, wait for the
   previous run's outcome or stop it. Two overlapping runs in one worktree reviewed and committed each
