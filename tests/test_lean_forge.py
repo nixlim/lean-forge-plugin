@@ -504,9 +504,29 @@ class LandTests(Base):
         self.raw_commit(other, "break the base")
         sh("git", "push", "-q", "origin", "HEAD:main", cwd=other)
         self.commit("two\n")
+        head = git.head(self.repo)
         out = workflows.land(self.repo)
         self.assertEqual((out["status"], out["stage"]), ("blocked", "gates"), out)
         self.assertEqual(git.git("ls-remote", "origin", "main", cwd=self.repo).split()[0], git.head(other))
+        self.assertEqual(git.head(self.repo), head)
+
+    def test_a_land_that_stops_before_its_push_puts_the_branch_back(self):
+        (self.repo / "x.txt").write_text("".join(f"{i}\n" for i in range(9)))
+        self.reconfigure(land_review="final")
+        other = self.clone("other")
+        (other / "x.txt").write_text("".join(f"{i}\n" for i in range(9)).replace("3\n", "three\n"))
+        self.raw_commit(other, "change a line next to the unit's hunk")
+        sh("git", "push", "-q", "origin", "HEAD:main", cwd=other)
+        (self.repo / "x.txt").write_text("".join(f"{i}\n" for i in range(9)).replace("5\n", "five\n"))
+        self.script({"review-cheap": [PASS], "review-final": [BLOCK, PASS]})
+        self.assertEqual(workflows.commit_unit(self.repo, "change five")["status"], "committed")
+        head = git.head(self.repo)
+        out = workflows.land(self.repo)
+        self.assertEqual((out["status"], out["stage"]), ("blocked", "land-review"), out)
+        self.assertEqual(git.head(self.repo), head)
+        rebased = git.git("rev-parse", "main@{1}", cwd=self.repo).strip()  # what the rebase made, before the reset
+        self.assertNotEqual(git.patch_id(rebased, self.repo), git.patch_id(head, self.repo))
+        self.assertEqual(workflows.land(self.repo)["status"], "landed")
 
     def test_land_judges_with_the_config_of_the_base_it_fetched(self):
         self.commit("two\n")

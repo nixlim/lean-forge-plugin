@@ -70,6 +70,11 @@ message and rerun.
 5. If `[land].review = "final"`, run a fresh `review-final` over everything since the merge base.
 6. Fast-forward push. History stays linear.
 
+A land that stops before its push (gates or review blocked, a question, a rejected push, an error)
+puts the branch back on the commits it started from. The rebased commits never went through the
+chain, and a rebase that changes the lines around a hunk changes its patch id, so the next land would
+refuse them as made outside the chain. Fix the cause with another `commit` and rerun `land`.
+
 A land that waits more than five minutes for the lock returns `error`; rerun it.
 
 ## One run per worktree

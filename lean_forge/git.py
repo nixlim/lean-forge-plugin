@@ -84,7 +84,7 @@ def snapshot(cwd: Path | str, *files: str) -> str:
 
 
 def patch_id(sha: str, cwd: Path | str) -> str:
-    """Stable across a clean rebase, so evidence recorded before a rebase still matches after it."""
+    """Hashes context lines too, so a rebase that changes the lines around a hunk changes it."""
     diff = git("show", "--no-renames", "--format=", sha, cwd=cwd)
     out = git("patch-id", "--stable", cwd=cwd, stdin=diff).split()
     return out[0] if out else f"empty:{git('rev-parse', f'{sha}^{{tree}}', cwd=cwd).strip()}"

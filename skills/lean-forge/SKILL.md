@@ -40,7 +40,9 @@ halted, 2 needs_direction, 3 awaiting_approval.
 
 5. **Land.** When the units are done, run `lean-forge land`. It rebases onto the remote base under a
    lock, re-runs the gates and fast-forward pushes. A rebase conflict returns `needs_direction`:
-   resolve it yourself when the right combination is clear from the code, otherwise ask.
+   resolve it yourself when the right combination is clear from the code, otherwise ask. A land that
+   stops before its push leaves the branch as it found it: fix the cause with `lean-forge commit`,
+   then rerun `land`.
 6. **Clean up** once the outcome is `landed`: from the main checkout, `git worktree remove
    .worktrees/<topic>` and `git branch -d agent/<topic>`.
 

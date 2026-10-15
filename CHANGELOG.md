@@ -58,6 +58,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A land that stops before its push now puts the branch back on the commits it started from
+  ([#1](https://github.com/nixlim/lean-forge-plugin/issues/1)). It used to leave the rebased
+  commits in place. When the rebase had changed the lines around a hunk, for example a new bullet
+  that another unit landed at the top of a changelog, the commit's patch id changed. The next land
+  then refused it, and every commit on top of it, as made outside the chain, and only a human could
+  land them.
 - The test suite removes its temporary directories, and `eval` removes its scratch directory. Both
   were left in `/tmp`, one per test and one per fixture, and on a shared host thousands of them used
   up the tmpfs inodes.
