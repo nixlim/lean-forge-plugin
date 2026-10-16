@@ -489,6 +489,17 @@ class LandTests(Base):
             self.assertEqual((out["status"], out.get("stage")), status, out)
             self.assertEqual(self.calls(), ["review-final", "review-final"])
 
+    def test_a_passing_land_review_keeps_its_findings_in_the_outcome(self):
+        self.reconfigure(land_review="final")
+        noted = {**PASS, "findings": ["[DOC-01] NIT: x.txt: wording"], "summary": "fine, one nit"}
+        (self.repo / "x.txt").write_text("two\n")
+        self.script({"review-cheap": [PASS], "review-final": [noted]})
+        self.assertEqual(workflows.commit_unit(self.repo, "change x")["status"], "committed")
+        out = workflows.land(self.repo)
+        self.assertEqual(out["status"], "landed", out)
+        outcome, _ = runs.load(self.repo, out["run"])
+        self.assertEqual((outcome.get("findings"), outcome.get("summary")), (noted["findings"], noted["summary"]))
+
     def test_a_hung_remote_times_out_instead_of_blocking_land(self):
         self.reconfigure(git_timeout=1)
         self.commit("two\n")

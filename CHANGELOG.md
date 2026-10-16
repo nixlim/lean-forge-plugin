@@ -62,6 +62,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A landed outcome now carries the land review's findings and summary
+  ([#2](https://github.com/nixlim/lean-forge-plugin/issues/2)). The land review records no evidence
+  so that it is never served from cache, and the run log kept only the number of findings, so the
+  notes of a review that passed were lost.
 - A land that stops before its push now puts the branch back on the commits it started from
   ([#1](https://github.com/nixlim/lean-forge-plugin/issues/1)). It used to leave the rebased
   commits in place. When the rebase had changed the lines around a hunk, for example a new bullet

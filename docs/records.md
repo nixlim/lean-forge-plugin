@@ -42,7 +42,8 @@ One directory per verb invocation:
 
 The columns are run id, workflow, status, cost, time, and the sha or the reason it stopped. A run
 still in progress shows `running` until it writes its outcome. `lean-forge runs <id>` prints one
-run's outcome and every step. Review findings are in `evidence.jsonl`.
+run's outcome and every step. Commit review findings are in `evidence.jsonl`; a land review's are in
+its land run's outcome.
 
 ## What is committed
 

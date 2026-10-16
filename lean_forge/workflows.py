@@ -177,6 +177,7 @@ def _rebase_and_push(root: Path, run: Run, remote: str, base: str, base_ref: str
     failures = gates(root, config, tree, run)
     if failures:
         return "blocked", dict(stage="gates", tree=tree, failures=failures, pulled=pulled)
+    notes = {}  # a PASS can still carry findings, and an uncached land review keeps them nowhere else
     if config["land"]["review"] != "none":
         # Never cached: a commit-time PASS for this tree reviewed one unit, not base...HEAD.
         since = git.git("merge-base", base_ref, "HEAD", cwd=root).strip() if base_ref else git.EMPTY_TREE
@@ -186,11 +187,12 @@ def _rebase_and_push(root: Path, run: Run, remote: str, base: str, base_ref: str
                                            findings=verdict["findings"])
         if verdict["verdict"] != "PASS":
             return "blocked", dict(stage="land-review", findings=verdict["findings"])
+        notes = dict(findings=verdict["findings"], summary=verdict["summary"])
     if not git.succeeds("push", "-q", remote, f"HEAD:refs/heads/{base}", cwd=root, timeout=net):
         return "blocked", dict(stage="push", reason="the remote rejected the push (it may have moved); rerun land")
     sha = git.head(root)
     evidence.add(root, kind="land", sha=sha, tree=tree, onto=f"{remote}/{base}")
-    return "landed", dict(sha=sha, onto=f"{remote}/{base}", pulled=pulled)
+    return "landed", dict(sha=sha, onto=f"{remote}/{base}", pulled=pulled, **notes)
 
 
 FIXTURE = re.compile(r"\A---\n(?P<meta>.*?)\n---\n.*?```diff\n(?P<diff>.*?)```", re.DOTALL)

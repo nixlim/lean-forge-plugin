@@ -68,6 +68,7 @@ message and rerun.
    aborts the rebase and returns `needs_direction`.
 4. Reload the configuration from the base just fetched, and re-run its gates on the rebased tree.
 5. If `[land].review = "final"`, run a fresh `review-final` over everything since the merge base.
+   Its findings and summary go into the outcome, on a PASS too, since it records no evidence.
 6. Fast-forward push. History stays linear.
 
 A land that stops before its push (gates or review blocked, a question, a rejected push, an error)
